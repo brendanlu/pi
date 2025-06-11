@@ -16,9 +16,9 @@ sys.path.append(r"/home/brend/Documents")
 import timestamping
 
 def record_mp4_to_usb(
-    out_folder,
     *,
-    duration_seconds=5,
+    out_folder,
+    duration_seconds,
     fps=20,
     width=640,
     height=480
@@ -41,7 +41,7 @@ def record_mp4_to_usb(
 
     target_frame_count = int(duration_seconds * fps)
     current_frame_count = 0
-    print(f"Recording started. Aiming to capture {duration_seconds} of footage.")
+    print(f"Recording started. Aiming to capture {duration_seconds}s of footage.")
 
     try:
         while current_frame_count < target_frame_count:
@@ -85,6 +85,7 @@ def record_mp4_to_usb(
             print("ERROR: during .avi temp to .mp4 conversion and file writing")
 
 if __name__ == "__main__":
-    usb_path = f"/media/brend/{USB_DEVICE_NAME}"
+    usb_path = f"/media/brend/{USB_DEVICE_NAME}/vidfiles"
     # usb_output_fpath = os.path.join(usb_path, "test.mp4")
-    record_mp4_to_usb(out_folder=usb_path)
+    for i in range(20):
+        record_mp4_to_usb(out_folder=usb_path, duration_seconds=15)
