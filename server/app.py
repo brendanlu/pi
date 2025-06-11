@@ -1,4 +1,4 @@
-from flask import Flask, render_template, send_file, abort
+from flask import Flask, render_template, send_file, abort, url_for
 from werkzeug.utils import safe_join
 app = Flask(__name__)
 
@@ -6,9 +6,17 @@ import os
 import signal
 import sys
 import atexit
+from datetime import datetime
+from typing import List
+
+sys.path.append(r"/home/brend/Documents")
+import timestamping
 
 USB_DEVICE_NAME = "E657-3701"
 videos_path = f"/media/brend/{USB_DEVICE_NAME}"
+
+def fetch_mp4_files(videos_path: str) -> List[str]:
+    return sorted([f for f in os.listdir(videos_path) if f.endswith(".mp4")])
 
 def cleanup():
     print("\nRunning app.py `cleanup()`...")
@@ -29,8 +37,7 @@ def home():
 @app.route("/browse")
 def browse(): 
     try:
-        mp4_files = [f for f in os.listdir(videos_path) if f.endswith(".mp4")]
-        mp4_files.sort()
+        mp4_files = fetch_mp4_files(videos_path)
     except:
         abort(404, descripton="Error displaying sorted .mp4 files")
 
