@@ -17,6 +17,12 @@ async function loadPlaylist() {
     setInterval(updateTimestamp, 100);  // live update
 }
 
+function getSeekStep() {
+    const input = document.getElementById("seekStep");
+    const val = parseFloat(input.value);
+    return isNaN(val) || val <= 0 ? 0.5 : val;
+}
+
 function loadVideoAtTime(globalTime) {
     let accumulated = 0;
     for (let i = 0; i < videoList.length; i++) {
@@ -68,6 +74,11 @@ player.addEventListener("ended", () => {
         currentVideoIndex = nextIndex;
         loadVideoAtTime(computeGlobalTime()); // continue playback
     }
+});
+
+document.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft") seek(-getSeekStep());
+    if (e.key === "ArrowRight") seek(getSeekStep());
 });
 
 loadPlaylist();
