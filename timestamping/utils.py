@@ -53,6 +53,9 @@ class TestUtils(unittest.TestCase):
         # timestamping files
         self.assertEqual(input_dt.replace(microsecond=0), parsed_dt)
         self.assertEqual(input_camera_name, parsed_camera_name)
+    
+    def test_generate_filename_for_NOW(self):
+        self.assertIsInstance(generate_filename(), str)
 
 if __name__ == "__main__":
     unittest.main()
