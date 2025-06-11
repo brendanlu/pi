@@ -23,7 +23,7 @@ function getSeekStep() {
     return isNaN(val) || val <= 0 ? 0.5 : val;
 }
 
-function loadVideoAtTime(globalTime) {
+function loadVideoAtTime(globalTime, preservePause = false) {
     let accumulated = 0;
     for (let i = 0; i < videoList.length; i++) {
         let vid = videoList[i];
@@ -31,8 +31,10 @@ function loadVideoAtTime(globalTime) {
             currentVideoIndex = i;
             let localTime = globalTime - accumulated;
             player.src = `/video/${vid.filename}`;
-            player.currentTime = localTime;
-            player.play();
+            player.onloadedmetadata = () => {
+                player.currentTime = localTime;
+                if (!preservePause) player.play(); // only autoplay if not preserving pause
+            };
             currentGlobalTime = globalTime;
             return;
         }
@@ -43,10 +45,13 @@ function loadVideoAtTime(globalTime) {
 }
 
 function seek(seconds) {
+    const wasPaused = player.paused;
+
     let newTime = currentGlobalTime + seconds;
     if (newTime < 0) newTime = 0;
     currentGlobalTime = newTime;
-    loadVideoAtTime(newTime);
+
+    loadVideoAtTime(newTime, wasPaused);
 }
 
 function updateTimestamp() {
@@ -79,6 +84,20 @@ player.addEventListener("ended", () => {
 document.addEventListener("keydown", (e) => {
     if (e.key === "ArrowLeft") seek(-getSeekStep());
     if (e.key === "ArrowRight") seek(getSeekStep());
+});
+
+document.addEventListener('keydown', function(event) {
+    if (event.key === "Enter") {
+        const seekInput = document.getElementById("seekStep");
+        if (document.activeElement === seekInput) {
+            // If already focused, blur it (exit)
+            seekInput.blur();
+        } else {
+            // Else, focus the input box
+            seekInput.focus();
+        }
+        event.preventDefault();  // prevent form submit or default enter behavior
+    }
 });
 
 loadPlaylist();
