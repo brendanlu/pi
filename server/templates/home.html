@@ -8,10 +8,10 @@
 <body>
     <h1>📹 Continuous Video Viewer</h1>
     <div id="timestamp">Timestamp: --</div>
-    <video id="player" width="640" height="360" controls></video>
+    <video id="player" width="640" height="480" controls></video>
     <div id="controls">
-        <button onclick="seek(-0.5)">⏪ Back 0.5s</button>
-        <button onclick="seek(0.5)">⏩ Forward 0.5s</button>
+        <button onclick="seek(-1.0)">⏪ Back 1.0s</button>
+        <button onclick="seek(1.0)">⏩ Forward 1.0s</button>
     </div>
     <script src="{{ url_for('static', filename='js/player.js') }}"></script>
     

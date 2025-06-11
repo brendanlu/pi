@@ -12,7 +12,11 @@ sys.path.append(r"/home/brend/Documents")
 import timestamping
 
 USB_DEVICE_NAME = "E657-3701"
-videos_path = f"/media/brend/{USB_DEVICE_NAME}"
+# todo: it should be able to handle files of differing length somehow
+# ideas: maybe blacken out the screen to show user during video seeking that
+# that whole chunk of time has no data
+VIDS_DURATION_SECONDS_ASSUMED = 15.0 # currently just hardcording this
+videos_path = f"/media/brend/{USB_DEVICE_NAME}/vidfiles"
 
 def fetch_mp4_files(videos_path: str) -> List[str]:
     return sorted([f for f in os.listdir(videos_path) if f.endswith(".mp4")])
@@ -47,7 +51,7 @@ def playlist():
                 video_data.append({
                     "filename": mp4_file,
                     "start": timestamping.dt_strfmt(dt),
-                    "duration_seconds": 5.0
+                    "duration_seconds": VIDS_DURATION_SECONDS_ASSUMED
                 })
         assert video_data
     except:

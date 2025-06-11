@@ -62,4 +62,12 @@ function computeGlobalTime() {
     return time + player.currentTime;
 }
 
+player.addEventListener("ended", () => {
+    const nextIndex = currentVideoIndex + 1;
+    if (nextIndex < videoList.length) {
+        currentVideoIndex = nextIndex;
+        loadVideoAtTime(computeGlobalTime()); // continue playback
+    }
+});
+
 loadPlaylist();
