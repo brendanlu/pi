@@ -1,19 +1,21 @@
 import cv2
 import os
 import subprocess
+import sys
 
 USB_DEVICE_NAME = "E657-3701"
 
+sys.path.append(r"/home/brend/Documents")
+import timestamping
+
 def record_mp4_to_usb(
+    out_folder,
     *,
-    out_fpath="test.mp4",
     duration_seconds=5,
     fps=20,
     width=640,
     height=480
 ):
-    assert out_fpath.endswith(".mp4"), "Please ensure `out_fpath` is .mp4"
-
     cap = cv2.VideoCapture(0)
     if not cap.isOpened:
         print("Error: Could not open video device.")
@@ -32,7 +34,7 @@ def record_mp4_to_usb(
 
     target_frame_count = int(duration_seconds * fps)
     current_frame_count = 0
-    print(f"Recording started. Saving to {out_fpath} for {duration_seconds} seconds.")
+    print(f"Recording started. Aiming to capture {duration_seconds} of footage.")
 
     try:
         while current_frame_count < target_frame_count:
@@ -46,15 +48,20 @@ def record_mp4_to_usb(
     except:
         print("Unexpected termination during video recording")
     finally:
-        print(f"{current_frame_count} of {target_frame_count} frames written to {out_fpath}")
+        # get time stamped fname ASAP so it's accurate
+        fname = timestamping.generate_filename(for_time="now", camera_name="testUSBcam")
 
         # cleanup cv2 stuff
+        print("Initiating open-cv cleanup...")
         cap.release()
         out.release()
-        cv2.destroyAllWindows()
+        # cv2.destroyAllWindows() # DO NOT NEED AS WE USED `pip install opencv-python-headless`
+        print(f"{current_frame_count} of {target_frame_count} frames captured.")
 
         # perform video conversion
         try:
+            assert os.path.exists(out_folder) and os.path.isdir(out_folder), "`out_folder` input is not valid"
+            out_fpath = os.path.join(out_folder, fname)
             assert os.path.isfile(temp_fname), "ERROR: cannot find temp .avi file for conversion to .mp4"
             subprocess.run([
                 "ffmpeg", # command-line tool ffmpeg for multimedia processing
@@ -68,9 +75,9 @@ def record_mp4_to_usb(
             ])
             os.remove(temp_fname)
         except:
-            print("ERROR: during .avi temp to .mp4 conversion")
+            print("ERROR: during .avi temp to .mp4 conversion and file writing")
 
 if __name__ == "__main__":
     usb_path = f"/media/brend/{USB_DEVICE_NAME}"
-    usb_output_fpath = os.path.join(usb_path, "test.mp4")
-    record_mp4_to_usb(out_fpath=usb_output_fpath)
+    # usb_output_fpath = os.path.join(usb_path, "test.mp4")
+    record_mp4_to_usb(out_folder=usb_path)
