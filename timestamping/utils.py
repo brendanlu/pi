@@ -3,7 +3,7 @@
 
 from datetime import datetime
 import re
-from typing import Tuple
+from typing import Tuple, Union
 import unittest
 
 TIMESTAMP_FMT = r"%Y%m%d_%H%M%S"
@@ -23,17 +23,20 @@ def generate_filename(
         timestamp = for_time.strftime(TIMESTAMP_FMT)
     return f"{timestamp}_{camera_name}{extension}"
 
-def parse_filename(fname: str) -> Tuple[datetime, str]:
+def parse_filename(fname: str) -> Tuple[datetime, str] | None:
     """Returns tuple containing:
          - timestamp as datetime object
          - camera name as string
     """
-    assert fname.endswith(".mp4")
-    regex_obj = re.match(TIMESTAMP_REGEX_FMT + "_(.+)\.mp4", fname)
-    assert regex_obj, f"ERROR: {fname} is unable to be timestamp parsed!"
-    timestamp_str, camera_name = regex_obj.groups()
-    dt = datetime.strptime(timestamp_str, TIMESTAMP_FMT)
-    return dt, camera_name
+    try:
+        assert fname.endswith(".mp4")
+        regex_obj = re.match(TIMESTAMP_REGEX_FMT + "_(.+)\.mp4", fname)
+        assert regex_obj, f"ERROR: {fname} is unable to be timestamp parsed!"
+        timestamp_str, camera_name = regex_obj.groups()
+        dt = datetime.strptime(timestamp_str, TIMESTAMP_FMT)
+        return dt, camera_name
+    except:
+        return None
 
 def dt_strfmt(dt: datetime):
     return dt.strftime(DISPLAY_STR_FMT)
