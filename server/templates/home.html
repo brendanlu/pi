@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Video Viewer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <h1>Welcome to the Video Viewer</h1>
+    <nav>
+        <ul>
+            <li><a href="{{ url_for('browse') }}">📁 Browse Recordings</a></li>
+            <li><a href="#">▶️ Continuous Playback (Coming Soon)</a></li>
+        </ul>
+    </nav>
+</body>
+</html>

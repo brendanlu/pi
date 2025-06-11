@@ -23,14 +23,18 @@ signal.signal(signal.SIGTERM, signal_handler)  # kill or system shutdown
 signal.signal(signal.SIGQUIT, signal_handler)  # quit signal
 
 @app.route("/")
-def index(): 
+def home():
+    return render_template("home.html")
+
+@app.route("/browse")
+def browse(): 
     try:
         mp4_files = [f for f in os.listdir(videos_path) if f.endswith(".mp4")]
         mp4_files.sort()
     except:
         abort(404, descripton="Error displaying sorted .mp4 files")
 
-    return render_template("index.html", files=mp4_files)
+    return render_template("browse.html", files=mp4_files)
 
 @app.route("/video/<filename>")
 def serve_video(filename):
