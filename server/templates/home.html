@@ -2,15 +2,22 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Video Viewer</title>
+    <title>Footage Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
-    <h1>Welcome to the Video Viewer</h1>
+    <h1>📹 Continuous Video Viewer</h1>
+    <div id="timestamp">Timestamp: --</div>
+    <video id="player" width="640" height="360" controls></video>
+    <div id="controls">
+        <button onclick="seek(-0.5)">⏪ Back 0.5s</button>
+        <button onclick="seek(0.5)">⏩ Forward 0.5s</button>
+    </div>
+    <script src="{{ url_for('static', filename='js/player.js') }}"></script>
+    
     <nav>
         <ul>
             <li><a href="{{ url_for('browse') }}">📁 Browse Recordings</a></li>
-            <li><a href="#">▶️ Continuous Playback (Coming Soon)</a></li>
         </ul>
     </nav>
 </body>

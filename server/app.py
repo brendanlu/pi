@@ -1,4 +1,4 @@
-from flask import Flask, render_template, send_file, abort, url_for
+from flask import Flask, render_template, send_file, abort, jsonify
 from werkzeug.utils import safe_join
 app = Flask(__name__)
 
@@ -6,7 +6,6 @@ import os
 import signal
 import sys
 import atexit
-from datetime import datetime
 from typing import List
 
 sys.path.append(r"/home/brend/Documents")
@@ -34,12 +33,34 @@ signal.signal(signal.SIGQUIT, signal_handler)  # quit signal
 def home():
     return render_template("home.html")
 
+@app.route("/playlist")
+def playlist():
+    try:
+        mp4_files = fetch_mp4_files(videos_path)
+    except:
+        abort(404, description="Error fetching + sorting .mp4 files for playback")
+    try:
+        video_data = []
+        for mp4_file in mp4_files:
+            dt, camera_name = timestamping.parse_filename(mp4_file)
+            if dt:
+                video_data.append({
+                    "filename": mp4_file,
+                    "start": timestamping.dt_strfmt(dt),
+                    "duration_seconds": 5.0
+                })
+        assert video_data
+    except:
+        abort(404, description="Error parsing filenames")
+
+    return jsonify(video_data)
+
 @app.route("/browse")
 def browse(): 
     try:
         mp4_files = fetch_mp4_files(videos_path)
     except:
-        abort(404, descripton="Error displaying sorted .mp4 files")
+        abort(404, descripton="Error fetching + sorting .mp4 files in browse")
 
     return render_template("browse.html", files=mp4_files)
 
