@@ -1,3 +1,10 @@
+"""Hacky script to write some random .mp4 files from a USB camera device to
+external USB storage device in a format that can be displayed on browser 
+using flask
+
+Makes a call in subprocess using ffmpeg to do the conversion
+"""
+
 import cv2
 import os
 import subprocess
