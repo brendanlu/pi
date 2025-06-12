@@ -12,6 +12,7 @@ import sys
 import traceback
 
 USB_DEVICE_NAME = "E657-3701"
+TEMP_FNAME = "70temp.avi"
 
 sys.path.append(r"/home/brend/Documents")
 import timestamping
@@ -37,8 +38,7 @@ def record_mp4_to_usb(
     # use ffmpeg H.264 encoder later, only way for now to get appropriate .mp4
     # format that will show in browser
     codec = cv2.VideoWriter_fourcc(*'MJPG')
-    temp_fname = "69temp.avi"
-    out = cv2.VideoWriter(temp_fname, codec, fps, (width, height))
+    out = cv2.VideoWriter(TEMP_FNAME, codec, fps, (width, height))
 
     target_frame_count = int(duration_seconds * fps)
     current_frame_count = 0
@@ -69,11 +69,11 @@ def record_mp4_to_usb(
         try:
             assert os.path.exists(out_folder) and os.path.isdir(out_folder), "`out_folder` input is not valid"
             out_fpath = os.path.join(out_folder, fname)
-            assert os.path.isfile(temp_fname), "ERROR: cannot find temp .avi file for conversion to .mp4"
+            assert os.path.isfile(TEMP_FNAME), "ERROR: cannot find temp .avi file for conversion to .mp4"
             subprocess.run([
                 "ffmpeg", # command-line tool ffmpeg for multimedia processing
                 "-y", # output overwrites any files with same name
-                "-i", temp_fname, # input .avi file
+                "-i", TEMP_FNAME, # input .avi file
                 "-c:v", "libx264", # use the H.264 encoder (libx264)
                 "-preset", "fast", # encoding speed/quality trade-off preset
                 "-crf", "23", # constant Rate Factor — controls quality (lower = better quality & bigger file); 23 is default
@@ -86,7 +86,7 @@ def record_mp4_to_usb(
 
         # remove temp file
         try: 
-            os.remove(temp_fname)
+            os.remove(TEMP_FNAME)
         except:
             traceback.print_exc()
             sys.exit("ERROR: during deletion of .avi temp file, check if it was even created")
