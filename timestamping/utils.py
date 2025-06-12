@@ -16,6 +16,10 @@ def generate_filename(
         camera_name="camera1",
         extension=".mp4",
     ) -> str:
+    """We need to be quite careful when generating files, because if we do it
+    wrong it's a massive headache, so all parameters are keyword ONLY by
+    deliberate design.
+    """
     if for_time == "now":
         timestamp = datetime.now().strftime(TIMESTAMP_FMT)
     else:
@@ -23,15 +27,15 @@ def generate_filename(
         timestamp = for_time.strftime(TIMESTAMP_FMT)
     return f"{timestamp}_{camera_name}{extension}"
 
-def parse_filename(fname: str) -> Tuple[datetime, str] | None:
+def parse_filename(fname: str, extension=".mp4") -> Tuple[datetime, str] | None:
     """Returns tuple containing:
          - timestamp as datetime object
          - camera name as string
     Otherwise returns None if cannot parse
     """
     try:
-        assert fname.endswith(".mp4")
-        regex_obj = re.match(TIMESTAMP_REGEX_FMT + "_(.+)\.mp4", fname)
+        assert fname.endswith(extension)
+        regex_obj = re.match(TIMESTAMP_REGEX_FMT + f"_(.+)\{extension}", fname)
         assert regex_obj, f"ERROR: {fname} is unable to be timestamp parsed!"
         timestamp_str, camera_name = regex_obj.groups()
         dt = datetime.strptime(timestamp_str, TIMESTAMP_FMT)
@@ -44,19 +48,27 @@ def dt_strfmt(dt: datetime):
 
 class TestUtils(unittest.TestCase):
     def test_filename_generate_and_parse(self):
-        # generate dummy file name
-        input_dt = datetime.now()
-        input_camera_name = "aaa"
-        fname = generate_filename(for_time=input_dt, camera_name=input_camera_name)
+        for extension in [".mp4", ".log"]:
+            # generate dummy file name
+            input_dt = datetime.now()
+            input_camera_name = "aaa"
+            fname = generate_filename(
+                for_time=input_dt,
+                camera_name=input_camera_name,
+                extension=extension
+            )
 
-        # parse dummy file name
-        parsed_dt, parsed_camera_name = parse_filename(fname)
+            # parse dummy file name
+            parsed_dt, parsed_camera_name = parse_filename(
+                fname,
+                extension=extension
+            )
 
-        # check roundabout works
-        # get rid of microsecond data in input_dt as we lose this info when 
-        # timestamping files
-        self.assertEqual(input_dt.replace(microsecond=0), parsed_dt)
-        self.assertEqual(input_camera_name, parsed_camera_name)
+            # check roundabout works
+            # get rid of microsecond data in input_dt as we lose this info when 
+            # timestamping files
+            self.assertEqual(input_dt.replace(microsecond=0), parsed_dt)
+            self.assertEqual(input_camera_name, parsed_camera_name)
     
     def test_generate_filename_for_NOW(self):
         self.assertIsInstance(generate_filename(), str)
