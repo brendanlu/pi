@@ -9,6 +9,7 @@ import cv2
 import os
 import subprocess
 import sys
+import traceback
 
 USB_DEVICE_NAME = "E657-3701"
 
@@ -23,7 +24,7 @@ def record_mp4_to_usb(
     width=640,
     height=480
 ):
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(1) # run `v4l2-ctl --list-devices` in terminal
     if not cap.isOpened:
         print("Error: Could not open video device.")
         return
@@ -49,15 +50,14 @@ def record_mp4_to_usb(
             if not ret: 
                 print(f"Failed to grab frame after {current_frame_count/fps} seconds.")
                 break
-            
             out.write(frame)
+            if current_frame_count == 0:
+                # get time stamped fname ASAP so it's accurate
+                fname = timestamping.generate_filename(for_time="now", camera_name="testUSBcam")
             current_frame_count += 1
     except:
         print("Unexpected termination during video recording")
     finally:
-        # get time stamped fname ASAP so it's accurate
-        fname = timestamping.generate_filename(for_time="now", camera_name="testUSBcam")
-
         # cleanup cv2 stuff
         print("Initiating open-cv cleanup...")
         cap.release()
@@ -80,12 +80,19 @@ def record_mp4_to_usb(
                 "-pix_fmt", "yuv420p", # output pixel format: yuv420p generally compatible with most browsers
                 out_fpath
             ])
+        except:
+            traceback.print_exc()
+            sys.exit("ERROR: during .avi temp to .mp4 conversion and file writing")
+
+        # remove temp file
+        try: 
             os.remove(temp_fname)
         except:
-            print("ERROR: during .avi temp to .mp4 conversion and file writing")
+            traceback.print_exc()
+            sys.exit("ERROR: during deletion of .avi temp file, check if it was even created")
 
 if __name__ == "__main__":
     usb_path = f"/media/brend/{USB_DEVICE_NAME}/vidfiles"
     # usb_output_fpath = os.path.join(usb_path, "test.mp4")
-    for i in range(20):
+    for i in range(1):
         record_mp4_to_usb(out_folder=usb_path, duration_seconds=15)
