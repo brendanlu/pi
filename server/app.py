@@ -46,7 +46,7 @@ def playlist():
     try:
         video_data = []
         for mp4_file in mp4_files:
-            dt, camera_name = timestamping.parse_filename(mp4_file)
+            dt, camera_name = timestamping.parse_filename(mp4_file) # TODO: pass in camera_name to JS
             if dt:
                 video_data.append({
                     "filename": mp4_file,

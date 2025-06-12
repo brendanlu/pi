@@ -27,6 +27,7 @@ def parse_filename(fname: str) -> Tuple[datetime, str] | None:
     """Returns tuple containing:
          - timestamp as datetime object
          - camera name as string
+    Otherwise returns None if cannot parse
     """
     try:
         assert fname.endswith(".mp4")
