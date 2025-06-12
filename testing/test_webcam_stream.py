@@ -3,7 +3,7 @@ import os
 import signal
 import sys
 
-VIDEO_DEVICE = "/dev/video0"
+VIDEO_DEVICE = "/dev/video1"
 
 # the follow just points to the clone of the repo
 mjpg_streamer_path = r"/home/brend/Downloads/mjpg-streamer/mjpg-streamer-experimental"
