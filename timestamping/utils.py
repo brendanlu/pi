@@ -1,4 +1,6 @@
 """Running this file directly will test the functions within it
+Despite some of the naming in this file, we actually use this module for
+generating log file names as well as camera names!
 """
 
 from datetime import datetime
