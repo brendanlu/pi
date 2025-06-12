@@ -1,6 +1,8 @@
 from picamera2 import Picamera2
 from picamera2.encoders import H264Encoder
 from picamera2.outputs import FileOutput
+from libcamera import Transform
+
 import sys
 import subprocess
 import time
@@ -60,7 +62,10 @@ if __name__ == "__main__":
     # -
     logging.debug("Initializing picamera and h264 encoder objects...")
     picam2 = Picamera2()
-    video_config = picam2.create_video_configuration(main={"size": (1920, 1080)})
+    video_config = picam2.create_video_configuration(
+        main={"size": (1920, 1080)},
+        transform=Transform(hflip=False, vflip=True)
+    )
     picam2.configure(video_config)
     h264_encoder = H264Encoder()
     picam2.start()
