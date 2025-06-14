@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 sys.path.append(r"/home/brend/Documents")
 import timestamping
 
-HOW_MANY_VIDS = 2
+HOW_MANY_VIDS = 1
 VID_LENGTH_SECONDS = 15
 
 USB_DEVICE_NAME = "E657-3701"
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     picam2 = Picamera2()
     video_config = picam2.create_video_configuration(
         main={"size": (1920, 1080)},
-        transform=Transform(hflip=False, vflip=True)
+        transform=Transform(hflip=True, vflip=True)
     )
     picam2.configure(video_config)
     h264_encoder = H264Encoder()

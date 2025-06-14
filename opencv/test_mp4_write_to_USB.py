@@ -25,7 +25,7 @@ def record_mp4_to_usb(
     width=640,
     height=480
 ):
-    cap = cv2.VideoCapture(1) # run `v4l2-ctl --list-devices` in terminal
+    cap = cv2.VideoCapture(0) # run `v4l2-ctl --list-devices` in terminal
     if not cap.isOpened:
         print("Error: Could not open video device.")
         return
@@ -43,6 +43,7 @@ def record_mp4_to_usb(
     target_frame_count = int(duration_seconds * fps)
     current_frame_count = 0
     print(f"Recording started. Aiming to capture {duration_seconds}s of footage.")
+    fname = timestamping.generate_filename(for_time="now", camera_name="testUSBcam")
 
     try:
         while current_frame_count < target_frame_count:
@@ -50,10 +51,7 @@ def record_mp4_to_usb(
             if not ret: 
                 print(f"Failed to grab frame after {current_frame_count/fps} seconds.")
                 break
-            out.write(frame)
-            if current_frame_count == 0:
-                # get time stamped fname ASAP so it's accurate
-                fname = timestamping.generate_filename(for_time="now", camera_name="testUSBcam")
+            out.write(frame)                
             current_frame_count += 1
     except:
         print("Unexpected termination during video recording")
