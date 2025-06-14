@@ -43,7 +43,7 @@ def ffmpeg_convert_h264_to_mp4(h264_fname):
         logging.info(f"Processing job for {h264_fname} successfully complete, output to {mp4_fpath}!")
     except:
         logging.critical(f"Processing job for {h264_fname} FAILED.")
-        RuntimeError(f"Error thrown in converting {h264_fname}")
+        raise RuntimeError(f"Error thrown in converting {h264_fname}")
 
 
 if __name__ == "__main__":
