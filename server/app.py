@@ -1,6 +1,12 @@
-from flask import Flask, render_template, send_file, abort, jsonify
+from flask import Flask, render_template, send_file, abort, jsonify, Response
 from werkzeug.utils import safe_join
 app = Flask(__name__)
+
+from picamera2 import Picamera2
+import cv2
+
+picam2 = Picamera2()
+picam2.start()
 
 import os
 import signal
@@ -16,7 +22,11 @@ USB_DEVICE_NAME = "E657-3701"
 # ideas: maybe blacken out the screen to show user during video seeking that
 # that whole chunk of time has no data
 VIDS_DURATION_SECONDS_ASSUMED = 15.0 # currently just hardcording this 15 seconds assumption
-videos_path = f"/media/brend/{USB_DEVICE_NAME}/vidfiles"
+USB_DEVICE_NAME = "E657-3701"
+USB_PATH = os.path.join("/media/brend", USB_DEVICE_NAME)
+USB_VID_PATH = os.path.join(USB_PATH, "vidfiles")
+
+###############################################################################
 
 def fetch_mp4_files(videos_path: str) -> List[str]:
     return sorted([f for f in os.listdir(videos_path) if f.endswith(".mp4")])
@@ -27,7 +37,7 @@ def cleanup():
 atexit.register(cleanup)
 
 def signal_handler(sig, frame):
-    sys.exit(0)
+    sys.exit(0) # this just triggers atexit ^^^
 
 signal.signal(signal.SIGINT, signal_handler)   # ctrl+C
 signal.signal(signal.SIGTERM, signal_handler)  # kill or system shutdown
@@ -40,7 +50,7 @@ def home():
 @app.route("/playlist")
 def playlist():
     try:
-        mp4_files = fetch_mp4_files(videos_path)
+        mp4_files = fetch_mp4_files(USB_VID_PATH)
     except:
         abort(404, description="Error fetching + sorting .mp4 files for playback")
     try:
@@ -62,7 +72,7 @@ def playlist():
 @app.route("/browse")
 def browse(): 
     try:
-        mp4_files = fetch_mp4_files(videos_path)
+        mp4_files = fetch_mp4_files(USB_VID_PATH)
     except:
         abort(404, descripton="Error fetching + sorting .mp4 files in browse")
 
@@ -70,7 +80,7 @@ def browse():
 
 @app.route("/video/<filename>")
 def serve_video(filename):
-    safe_path = safe_join(videos_path, filename)
+    safe_path = safe_join(USB_VID_PATH, filename)
     if not safe_path or not os.path.isfile(safe_path):
         abort(404, description="Error fetching files from specified drive in Flask app.py")
     return send_file(safe_path, mimetype="video/mp4")
