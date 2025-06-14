@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Live Stream</title>
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><a href="{{ url_for('browse') }}">📁 Browse Recordings</a></li>
+            <li><a href="{{ url_for('stream') }}">🔴 Live Stream</a></li>
+        </ul>
+    </nav>
+
+    <h1>Live Stream from Picamera2</h1>
+    <img src="{{ url_for('video_feed') }}" style="width: 100%; max-width: 720px;" alt="Live Stream" />
+</body>
+</html>
