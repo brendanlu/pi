@@ -22,7 +22,6 @@ import timestamping
 VIDS_DURATION_SECONDS_ASSUMED = 15.0 # currently just hardcording this 15 seconds assumption
 
 USB_DEVICE_NAME = "E657-3701"
-USB_DEVICE_NAME = "E657-3701"
 USB_PATH = os.path.join("/media/brend", USB_DEVICE_NAME)
 USB_VID_PATH = os.path.join(USB_PATH, "vidfiles")
 
@@ -67,6 +66,7 @@ def generate_stream():
                 if error_last_frame_flag:
                     raise RuntimeError("Two corrupt stream frames in a row, aborting stream")
                 error_last_frame_flag = True
+                continue
             ret, buffer = cv2.imencode('.jpg', frame)
             if not ret:
                 logging.warning("Issue streaming frame in `generate_stream()`")
@@ -76,8 +76,8 @@ def generate_stream():
             time.sleep(0.06)  # about ~15fps ish
     except GeneratorExit:
         logging.info("Client disconnected from stream.")
-    except Exception as e:
-        logging.critical(f"Exception caught in stream: {e}")
+    except:
+        logging.critical(f"Exception caught in stream!", exc_info=True)
 
 @app.route("/playlist")
 def playlist():
