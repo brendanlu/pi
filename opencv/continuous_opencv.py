@@ -39,7 +39,7 @@ SUBPROCESS_TIMEOUT_SECONDS = VID_LENGTH_SECONDS * 2
 
 FPS = 20; WIDTH = 640; HEIGHT = 480
 
-LOG_LEVEL = logging.DEBUG
+LOG_FILE_LOG_LEVEL = logging.DEBUG
 
 def cleanup():
     logging.info("Running `cleanup()`...")
@@ -148,11 +148,11 @@ if __name__ == "__main__":
         extension=".log"
     )
     logging.basicConfig(
-        level=LOG_LEVEL,  # Decreasing verbosity: DEBUG, INFO, WARNING, ERROR, CRITICAL
+        level=LOG_FILE_LOG_LEVEL,  # Decreasing verbosity: DEBUG, INFO, WARNING, ERROR, CRITICAL
         format='%(asctime)s [%(levelname)s] %(message)s',
         handlers=[
             logging.FileHandler(os.path.join(LOGS_DIR_PATH, timestamped_log_fname), mode="w"),
-            logging.StreamHandler()  # also prints to console
+            # logging.StreamHandler()  # also prints to console
         ]
     )
 
