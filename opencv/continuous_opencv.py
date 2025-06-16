@@ -16,6 +16,10 @@ import timestamping
 # script config
 ###############################################################################
 
+# run `v4l2-ctl --list-devices` in terminal
+# if multiple found, run `v4l2-ctl -d /dev/video0 --all` to query which one is raw footage
+CAMERA_DEVICE_NUMBER = 0 
+
 # VID_LENGTH_SECONDS = 60 * 60
 VID_LENGTH_SECONDS = 15
 USB_DEVICE_NAME = "E657-3701"
@@ -151,7 +155,7 @@ if __name__ == "__main__":
     )
 
     logging.debug("Configuring cv2 camera...")
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(CAMERA_DEVICE_NUMBER)
     if not cap.isOpened():
         logging.critical("Cannot initialize video capture device")
         sys.exit(1)
@@ -164,8 +168,7 @@ if __name__ == "__main__":
     futures = []
 
     logging.debug("Starting continuous recording loop...")
-    videos_complete = 0
-    last_pending_jobs = 0
+    n_videos_complete = 0
     job_errors = 0
     temp_avi_fname = None
     try:
@@ -175,6 +178,7 @@ if __name__ == "__main__":
                 if f.done():
                     try:
                         f.result()
+                        n_videos_complete += 1
                         job_errors = 0
                     except:
                         job_errors += 1
@@ -184,25 +188,23 @@ if __name__ == "__main__":
                         
             # --continue recording and submitting processing jobs
             temp_avi_fname = record_to_temp_avi(cap)
-            logging.info(f"Video #{videos_complete+1}, {temp_avi_fname}, submitted for conversion...")
+            logging.info(f"Video #{n_videos_complete+1}, {temp_avi_fname}, submitted for conversion...")
             future = executor.submit(avi_convert_to_mp4, temp_avi_fname) # always try to convert
             futures.append(future)
 
-            # -- monitor jobload
+            # --monitor jobload
             futures = [f for f in futures if not f.done()]
-            pending_jobs = len(futures)
-            if pending_jobs > WORKERS_LIMIT:
-                logging.warning(f"{pending_jobs} jobs submitted, >limit of {WORKERS_LIMIT}")
-            if pending_jobs > JOB_QUEUE_SIZE_UNTIL_SYS_EXIT:
-                logging.critical(f"{pending_jobs} jobs in queue! Aborting script now...")
-                raise RuntimeError(f"Job queue is dangerously bloated, with {pending_jobs} pending.")
-            if pending_jobs < last_pending_jobs:
-                videos_complete += last_pending_jobs - pending_jobs
-            last_pending_jobs = pending_jobs
+            n_pending_jobs = len(futures)
+            if n_pending_jobs > WORKERS_LIMIT:
+                logging.warning(f"{n_pending_jobs} jobs submitted, >limit of {WORKERS_LIMIT}")
+            if n_pending_jobs > JOB_QUEUE_SIZE_UNTIL_SYS_EXIT:
+                logging.critical(f"{n_pending_jobs} jobs in queue! Aborting script now...")
+                raise RuntimeError(f"Job queue is dangerously bloated, with {n_pending_jobs} pending.")
+            
     except KeyboardInterrupt:
-        logging.info(f"Continuous recording loop keyboard interrupted after {videos_complete} .mp4 successfully saved")
+        logging.info(f"Continuous recording loop: keyboard interrupt, {n_videos_complete} full {VID_LENGTH_SECONDS} have been saved to .mp4")
     except:
-        logging.critical(f"Exception caught in continuous recording loop", exc_info=True)
+        logging.critical(f"Continuous recording loop: caught exception!", exc_info=True)
     finally:
         logging.debug("Freeing camera resources...")
         cap.release()
