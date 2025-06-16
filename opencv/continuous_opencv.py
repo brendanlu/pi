@@ -7,6 +7,7 @@ import signal
 import subprocess
 import sys 
 import time
+import threading
 import concurrent.futures
 
 sys.path.append(r"/home/brend/Documents")
@@ -17,6 +18,8 @@ import timestamping
 ###############################################################################
 # `ps aux | awk '$8 == "Z"'`
 # `ps -eo pid,ppid,cmd | awk '$2 == 1 && $1 != 1'`
+# `pkill -f continuous_opencv.py` to kill if you can't gracefully
+# `ps aux | grep python` to check after
 
 # run `v4l2-ctl --list-devices` in terminal
 # if multiple found, run `v4l2-ctl -d /dev/video0 --all` to query which one is raw footage
@@ -42,14 +45,17 @@ FPS = 20; WIDTH = 640; HEIGHT = 480
 LOG_FILE_LOG_LEVEL = logging.DEBUG
 
 def cleanup():
-    logging.info("Running `cleanup()`...")
+    logging.debug("FINAL SYSTEM CLEANUP: Running `cleanup()`...")
+    logging.info("FINAL SYSTEM CLEANUP: `cleanup()` COMPLETE!")
 
 atexit.register(cleanup)
 
+shutdown_flag = threading.Event()
 def signal_handler(sig, frame):
-    logging.info("Running `signal_handler`...")
+    logging.info(f"`signal_handler()`: signal {sig} recieved in PID {os.getpid()}, setting shutdown flag...")
+    shutdown_flag.set()
 
-signal.signal(signal.SIGINT, signal_handler)   # ctrl+C
+signal.signal(signal.SIGINT, signal_handler)   # Ctrl+C
 signal.signal(signal.SIGTERM, signal_handler)  # kill or system shutdown
 signal.signal(signal.SIGQUIT, signal_handler)  # quit signal
 
@@ -65,8 +71,8 @@ def avi_convert_to_mp4(avi_fname) -> None:
         logging.critical(f"`avi_convert_to_mp4()` PID {os.getpid()}: issue with USB_VID_PATH")
         raise RuntimeError("Issue with USB_VID_PATH")
 
+    proc = None
     try:
-        result = None
         timestamp, _ = timestamping.parse_filename(avi_fname, extension=".avi")
         mp4_fname = timestamping.generate_filename(for_time=timestamp, camera_name="TESTPiCam", extension=".mp4")
         mp4_fpath = os.path.join(USB_VID_PATH, mp4_fname)
@@ -80,22 +86,22 @@ def avi_convert_to_mp4(avi_fname) -> None:
             "-pix_fmt", "yuv420p", # output pixel format: yuv420p generally compatible with most browsers
             mp4_fpath
         ]
-        result = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
-            timeout=SUBPROCESS_TIMEOUT_SECONDS,
             preexec_fn=os.setsid
         )
+        _, stderr = proc.communicate(timeout=SUBPROCESS_TIMEOUT_SECONDS)
         os.remove(avi_fname)
-        if result.returncode != 0:
-            logging.error(f"`avi_convert_to_mp4()` PID {os.getpid()}: subprocess error -> {result.stderr.decode()}")
+        if proc.returncode != 0:
+            logging.error(f"`avi_convert_to_mp4()` PID {os.getpid()}: subprocess error -> {stderr.decode()}")
             raise RuntimeError(f"Subprocess returned nonzero result")
         logging.info(f"`avi_convert_to_mp4()` PID {os.getpid()}: Processing job for {avi_fname} successfully complete, output to {mp4_fpath}")
     except:
         logging.critical(f"`avi_convert_to_mp4()` PID {os.getpid()}: Processing job for {avi_fname} FAILED.", exc_info=True)
-        if result:
-            os.killpg(result.pid, signal.SIGTERM)
+        if proc:
+            os.killpg(proc.pid, signal.SIGTERM)
         raise RuntimeError(f"Error thrown in converting {avi_fname}")
 
 def record_to_temp_avi(cap: cv2.VideoCapture) -> str:
@@ -108,10 +114,10 @@ def record_to_temp_avi(cap: cv2.VideoCapture) -> str:
     avi_fname = timestamping.generate_filename(for_time="now", camera_name="TEMP", extension=".avi")
     writer = cv2.VideoWriter(avi_fname, codec, FPS, (WIDTH, HEIGHT))
     if not writer.isOpened():
-        logging.critical("`record_to_temp_avi()`: VideoWriter failed to initialize")
+        logging.critical(f"`record_to_temp_avi()` {avi_fname}: VideoWriter failed to initialize")
         raise RuntimeError("VideoWriter failed to initialize")
 
-    logging.debug(f"`record_to_temp_avi()`: recording {VID_LENGTH_SECONDS}s video now...")
+    logging.info(f"`record_to_temp_avi()` {avi_fname}: recording {VID_LENGTH_SECONDS}s video now...")
     start_time = time.monotonic()
     frame_count = 0
     # the key design idea below: we always want to try and store, and later
@@ -120,21 +126,25 @@ def record_to_temp_avi(cap: cv2.VideoCapture) -> str:
         while True:
             ret, frame = cap.read() # captures EVERY frame even if camera write to a buffer
             if not ret:
-                logging.critical(f"`record_to_temp_avi()`: failed frame after {frame_count} frames")
-                raise RuntimeError(f"Failed frame after {frame_count} frames")
+                if shutdown_flag.is_set():
+                    logging.warning(f"`record_to_temp_avi()` {avi_fname}: interrupted after {frame_count} frames")
+                    break
+                else:
+                    logging.error(f"`record_to_temp_avi()` {avi_fname}: failed frame after {frame_count} frames")
+                    raise RuntimeError(f"Failed frame after {frame_count} frames")
             writer.write(frame)
             frame_count += 1
             if time.monotonic() - start_time >= VID_LENGTH_SECONDS:
-                logging.info(f"`record_to_temp_avi()`: {VID_LENGTH_SECONDS}s video written to {avi_fname}")
+                logging.info(f"`record_to_temp_avi()` {avi_fname}: {VID_LENGTH_SECONDS}s video written to temp file")
                 break
     except:
         logging.error(
-            f"`record_to_temp_avi()`: exception raise in recording loop",
+            f"`record_to_temp_avi()` {avi_fname}: exception raise in recording loop",
             exc_info=True
         )
     finally:
         writer.release()
-        logging.debug(f"`record_to_temp_avi()`: writer for {avi_fname} released.")
+        logging.debug(f"`record_to_temp_avi()` {avi_fname}: writer for {avi_fname} released.")
         return avi_fname # still return the name to try and convert and save as mp4
 
 
@@ -170,58 +180,68 @@ if __name__ == "__main__":
     futures = []
 
     logging.debug("Starting continuous recording loop...")
+    n_videos_recorded = 0
     n_videos_complete = 0
     job_errors = 0
     temp_avi_fname = None
     try:
-        while True:
-            # --job management
+        while not shutdown_flag.is_set():
+            # --query jobs
             for f in futures:
                 if f.done():
                     try:
                         f.result()
                         n_videos_complete += 1
-                        job_errors = 0
+                        logging.debug(f"{n_videos_complete} jobs complete!")
                     except:
                         job_errors += 1
-                        logging.error(f"Exception caught in future, {job_errors} in a row now", exc_info=True)
+                        logging.error(f"Exception caught in job, {job_errors} total job errors now", exc_info=True)
                         if job_errors > JOB_ERRORS_UNTIL_SYS_EXIT:
-                            raise RuntimeError(f"{job_errors} job exceptions caught in a row now, aborting recording loop...")
-                        
-            # --continue recording and submitting processing jobs
-            temp_avi_fname = record_to_temp_avi(cap)
-            logging.info(f"Video #{n_videos_complete+1}, {temp_avi_fname}, submitted for conversion...")
-            future = executor.submit(avi_convert_to_mp4, temp_avi_fname) # always try to convert
-            futures.append(future)
-
+                            raise RuntimeError(f"{job_errors} job exceptions caught, aborting recording loop...")
+            
             # --monitor jobload
             futures = [f for f in futures if not f.done()]
             n_pending_jobs = len(futures)
+            logging.debug(f"{n_pending_jobs} jobs pending")
             if n_pending_jobs > WORKERS_LIMIT:
-                logging.warning(f"{n_pending_jobs} jobs submitted, >limit of {WORKERS_LIMIT}")
+                logging.warning(f"{n_pending_jobs} jobs pending >limit of {WORKERS_LIMIT}")
             if n_pending_jobs > JOB_QUEUE_SIZE_UNTIL_SYS_EXIT:
                 logging.critical(f"{n_pending_jobs} jobs in queue! Aborting script now...")
                 raise RuntimeError(f"Job queue is dangerously bloated, with {n_pending_jobs} pending.")
+                        
+            # --continue recording and submitting processing jobs
+            temp_avi_fname = record_to_temp_avi(cap)
+            n_videos_recorded += 1
+            logging.info(f"Video #{n_videos_recorded}, {temp_avi_fname}, submitted for conversion...")
+            future = executor.submit(avi_convert_to_mp4, temp_avi_fname) # always try to convert
+            futures.append(future)
             
-    except KeyboardInterrupt:
-        logging.info(f"Continuous recording loop: keyboard interrupt, {n_videos_complete} full {VID_LENGTH_SECONDS} have been saved to .mp4")
     except:
         logging.critical(f"Continuous recording loop: caught exception!", exc_info=True)
     finally:
         logging.debug("Freeing camera resources...")
         cap.release()
-        # try to convert the final .avi file in case it was interrupted mid-way
-        if temp_avi_fname and os.path.exists(temp_avi_fname):
-            logging.warning(f"{temp_avi_fname} temp file still found, will attempt to process now...")
-            try:
-                avi_convert_to_mp4(temp_avi_fname)
-            except:
-                logging.error(f"Processing for {temp_avi_fname} FAILED.", exc_info=True)
     
     logging.debug("Querying any remaining workers now...")
     for f in futures:
         try:
             f.result()
+            n_videos_complete += 1
+            logging.debug(f"{n_videos_complete} jobs complete!")
         except:
-            logging.error("Exception caught in future", exc_info=True)
-    executor.shutdown()
+            logging.error("Exception caught in job", exc_info=True)
+    executor.shutdown(wait=True, cancel_futures=True)
+
+    # try to convert the final .avi file in case it was interrupted mid-way but
+    # conversion job was not submitted
+    if temp_avi_fname and os.path.exists(temp_avi_fname) and n_videos_recorded < n_videos_complete:
+        logging.warning(f"{temp_avi_fname} temp file still found, will attempt to process now...")
+        try:
+            avi_convert_to_mp4(temp_avi_fname)
+            n_videos_complete += 1
+            logging.debug(f"{n_videos_complete} jobs complete!")
+        except:
+            logging.error(f"Processing for {temp_avi_fname} FAILED.", exc_info=True)
+
+    logging.info(f"Continuous recording loop: {n_videos_complete} videos saved to .mp4")
+    logging.info("Main script shutdown complete")
