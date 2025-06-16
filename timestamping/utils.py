@@ -5,16 +5,22 @@ generating log file names as well as camera names!
 
 from datetime import datetime
 import re
-from typing import Tuple, Union
+from typing import Tuple, Callable
 import unittest
 
 TIMESTAMP_FMT = r"%Y%m%d_%H%M%S"
 TIMESTAMP_REGEX_FMT = r"(\d{8}_\d{6})" # ensure this matches above
 DISPLAY_STR_FMT = r"%Y-%m-%d %H:%M:%S" # formatted string for display, e.g. "2025-06-11 15:30:15"
 
+def _add_dot_to_extension(extension: str):
+    if not extension.startswith("."):
+        return "." + extension
+    else: 
+        return extension
+
 def generate_filename(
         *,
-        for_time: datetime = "now",
+        for_time: datetime="now",
         camera_name="camera1",
         extension=".mp4",
     ) -> str:
@@ -22,11 +28,14 @@ def generate_filename(
     wrong it's a massive headache, so all parameters are keyword ONLY by
     deliberate design.
     """
+    generate_now_timestamp: Callable[[None], str] = lambda: datetime.now().strftime(TIMESTAMP_FMT)
+    extension = _add_dot_to_extension(extension)
     if for_time == "now":
-        timestamp = datetime.now().strftime(TIMESTAMP_FMT)
-    else:
-        assert isinstance(for_time, datetime), "ERROR: `generate_filename` recieved non-datetime obj input"
+        timestamp = generate_now_timestamp()
+    elif isinstance(for_time, datetime):
         timestamp = for_time.strftime(TIMESTAMP_FMT)
+    else: # ERROR: `generate_filename` recieved non-datetime obj input
+        timestamp = generate_now_timestamp()
     return f"{timestamp}_{camera_name}{extension}"
 
 def parse_filename(fname: str, extension=".mp4") -> Tuple[datetime, str] | None:
@@ -35,9 +44,10 @@ def parse_filename(fname: str, extension=".mp4") -> Tuple[datetime, str] | None:
          - camera name as string
     Otherwise returns None if cannot parse
     """
+    extension = _add_dot_to_extension(extension)
     try:
         assert fname.endswith(extension)
-        regex_obj = re.match(TIMESTAMP_REGEX_FMT + f"_(.+)\{extension}", fname)
+        regex_obj = re.fullmatch(TIMESTAMP_REGEX_FMT + rf"_(.+){re.escape(extension)}", fname)
         assert regex_obj, f"ERROR: {fname} is unable to be timestamp parsed!"
         timestamp_str, camera_name = regex_obj.groups()
         dt = datetime.strptime(timestamp_str, TIMESTAMP_FMT)
@@ -50,10 +60,10 @@ def dt_strfmt(dt: datetime):
 
 class TestUtils(unittest.TestCase):
     def test_filename_generate_and_parse(self):
-        for extension in [".mp4", ".log"]:
+        for extension in [".mp4", ".log", "mp4", "log", "h264", "h.264", ".h.264"]:
             # generate dummy file name
             input_dt = datetime.now()
-            input_camera_name = "aaa"
+            input_camera_name = "aaa_bbb"
             fname = generate_filename(
                 for_time=input_dt,
                 camera_name=input_camera_name,
@@ -74,6 +84,87 @@ class TestUtils(unittest.TestCase):
     
     def test_generate_filename_for_NOW(self):
         self.assertIsInstance(generate_filename(), str)
+
+    # -- big brain prompt engineer tests below....
+
+    def test_parse_bad_filenames(self):
+        self.assertIsNone(parse_filename("badname.mp4"))
+        self.assertIsNone(parse_filename("20210615_123045.mp4"))  # missing camera name
+        self.assertIsNone(parse_filename("20210615_123045_camera1.txt"))  # wrong extension
+        self.assertIsNone(parse_filename("not_even_close"))  # completely wrong format
+    
+
+    def test_generate_filename_invalid_for_time(self):
+        """If for_time is invalid (e.g. int, list), fallback to now without error."""
+        invalid_inputs = [42, [], {}, 3.14, object()]
+        for inval in invalid_inputs:
+            fname = generate_filename(for_time=inval, camera_name="cam", extension=".mp4")
+            self.assertIsInstance(fname, str)
+            self.assertTrue(re.match(r"\d{8}_\d{6}_cam\.mp4", fname))
+
+    def test_generate_filename_camera_name_special_chars(self):
+        """Filename generation should handle special characters in camera_name."""
+        specials = ["cam name", "cam-name", "cam.name", "cam@name!", "123_cam"]
+        for name in specials:
+            fname = generate_filename(for_time=datetime(2025, 6, 16, 10, 30, 45), camera_name=name)
+            self.assertIn(name, fname)
+            self.assertTrue(fname.endswith(".mp4"))
+
+    def test_parse_filename_wrong_extension_case(self):
+        """Parsing should fail if extension case does not exactly match."""
+        fname = "20250616_103045_camera1.MP4"
+        self.assertIsNone(parse_filename(fname, extension=".mp4"))
+
+    def test_parse_filename_extra_underscores_in_camera_name(self):
+        """Parsing should correctly extract camera name even if it contains underscores."""
+        fname = "20250616_103045_my_camera_name.mp4"
+        parsed = parse_filename(fname, extension=".mp4")
+        self.assertIsNotNone(parsed)
+        dt, cam_name = parsed
+        self.assertEqual(cam_name, "my_camera_name")
+        self.assertEqual(dt, datetime.strptime("20250616_103045", TIMESTAMP_FMT))
+
+    def test_parse_filename_missing_timestamp(self):
+        """Parsing should fail if timestamp is missing or malformed."""
+        bad_fnames = [
+            "_camera1.mp4",
+            "20250616_camera1.mp4",
+            "20250616103045_camera1.mp4",
+            "2025_06_16_103045_camera1.mp4"
+        ]
+        for fname in bad_fnames:
+            self.assertIsNone(parse_filename(fname, extension=".mp4"))
+
+    def test_generate_and_parse_for_time_now_string(self):
+        """generate_filename with for_time='now' string should generate a valid filename parseable back."""
+        fname = generate_filename(for_time="now", camera_name="camX", extension=".log")
+        parsed = parse_filename(fname, extension=".log")
+        self.assertIsNotNone(parsed)
+        dt, cam_name = parsed
+        self.assertEqual(cam_name, "camX")
+        self.assertIsInstance(dt, datetime)
+
+    def test_generate_filename_with_none_for_time(self):
+        """generate_filename with for_time=None should behave like 'now'."""
+        fname = generate_filename(for_time=None, camera_name="camY")
+        parsed = parse_filename(fname)
+        self.assertIsNotNone(parsed)
+        _, cam_name = parsed
+        self.assertEqual(cam_name, "camY")
+
+    def test_parse_filename_empty_string(self):
+        """Parsing an empty string should safely return None."""
+        self.assertIsNone(parse_filename("", extension=".mp4"))
+
+    def test_parse_filename_long_camera_name(self):
+        """Parsing should handle very long camera names without crashing."""
+        long_name = "a" * 1000
+        fname = f"20250616_103045_{long_name}.mp4"
+        parsed = parse_filename(fname, extension=".mp4")
+        self.assertIsNotNone(parsed)
+        dt, cam_name = parsed
+        self.assertEqual(cam_name, long_name)
+
 
 if __name__ == "__main__":
     unittest.main()
