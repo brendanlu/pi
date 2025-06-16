@@ -196,3 +196,8 @@ cython_debug/
 
 # ignore any venv looking files
 .*venv*
+
+# Ignore video files
+*.avi
+*.mp4
+*.h264
