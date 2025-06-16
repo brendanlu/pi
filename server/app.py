@@ -38,6 +38,8 @@ def cleanup():
 atexit.register(cleanup)
 
 def signal_handler(sig, frame):
+    # YOU MUST SYS.EXIT(0) here!!!!!!!!
+    # otherwise ctrl+C will not work
     sys.exit(0) # this just triggers atexit ^^^
 
 signal.signal(signal.SIGINT, signal_handler)   # ctrl+C
