@@ -4,6 +4,7 @@ sys.path.append(r"/home/brend/Documents")
 import timestamping
 
 LOGS_DIR_PATH = "/home/brend/Documents/diskmanage/logs"
+# LOGS_DIR_PATH = "/home/brend/Documents/opencv/logs"
 
 if __name__ == "__main__":
     assert os.path.exists(LOGS_DIR_PATH) and os.path.isdir(LOGS_DIR_PATH)
