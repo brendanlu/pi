@@ -15,6 +15,8 @@ import timestamping
 ###############################################################################
 # script config
 ###############################################################################
+# `ps aux | awk '$8 == "Z"'`
+# `ps -eo pid,ppid,cmd | awk '$2 == 1 && $1 != 1'`
 
 # run `v4l2-ctl --list-devices` in terminal
 # if multiple found, run `v4l2-ctl -d /dev/video0 --all` to query which one is raw footage
@@ -45,7 +47,7 @@ def cleanup():
 atexit.register(cleanup)
 
 def signal_handler(sig, frame):
-    sys.exit(0) # this just triggers atexit ^^^
+    logging.info("Running `signal_handler`...")
 
 signal.signal(signal.SIGINT, signal_handler)   # ctrl+C
 signal.signal(signal.SIGTERM, signal_handler)  # kill or system shutdown
