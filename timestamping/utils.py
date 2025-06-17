@@ -38,13 +38,16 @@ def generate_filename(
         timestamp = generate_now_timestamp()
     return f"{timestamp}_{camera_name}{extension}"
 
-def parse_filename(fname: str, extension=".mp4") -> Tuple[datetime, str] | None:
+def parse_filename(fname: str, extension=".mp4") -> Tuple[datetime, str] | Tuple[None, None]:
     """Returns tuple containing:
          - timestamp as datetime object
          - camera name as string
     Otherwise returns None if cannot parse
     """
-    extension = _add_dot_to_extension(extension)
+    try:
+        extension = _add_dot_to_extension(extension)
+    except:
+        extension = extension
     try:
         assert fname.endswith(extension)
         regex_obj = re.fullmatch(TIMESTAMP_REGEX_FMT + rf"_(.+){re.escape(extension)}", fname)
@@ -53,7 +56,7 @@ def parse_filename(fname: str, extension=".mp4") -> Tuple[datetime, str] | None:
         dt = datetime.strptime(timestamp_str, TIMESTAMP_FMT)
         return dt, camera_name
     except:
-        return None
+        return None, None
 
 def dt_strfmt(dt: datetime):
     return dt.strftime(DISPLAY_STR_FMT)
@@ -88,10 +91,10 @@ class TestUtils(unittest.TestCase):
     # -- big brain prompt engineer tests below....
 
     def test_parse_bad_filenames(self):
-        self.assertIsNone(parse_filename("badname.mp4"))
-        self.assertIsNone(parse_filename("20210615_123045.mp4"))  # missing camera name
-        self.assertIsNone(parse_filename("20210615_123045_camera1.txt"))  # wrong extension
-        self.assertIsNone(parse_filename("not_even_close"))  # completely wrong format
+        self.assertEqual(parse_filename("badname.mp4"), (None, None))
+        self.assertEqual(parse_filename("20210615_123045.mp4"), (None, None))  # missing camera name
+        self.assertEqual(parse_filename("20210615_123045_camera1.txt"), (None, None))  # wrong extension
+        self.assertEqual(parse_filename("not_even_close"), (None, None))  # completely wrong format
     
 
     def test_generate_filename_invalid_for_time(self):
@@ -113,7 +116,7 @@ class TestUtils(unittest.TestCase):
     def test_parse_filename_wrong_extension_case(self):
         """Parsing should fail if extension case does not exactly match."""
         fname = "20250616_103045_camera1.MP4"
-        self.assertIsNone(parse_filename(fname, extension=".mp4"))
+        self.assertEqual(parse_filename(fname, extension=".mp4"), (None, None))
 
     def test_parse_filename_extra_underscores_in_camera_name(self):
         """Parsing should correctly extract camera name even if it contains underscores."""
@@ -133,7 +136,7 @@ class TestUtils(unittest.TestCase):
             "2025_06_16_103045_camera1.mp4"
         ]
         for fname in bad_fnames:
-            self.assertIsNone(parse_filename(fname, extension=".mp4"))
+            self.assertEqual(parse_filename(fname, extension=".mp4"), (None, None))
 
     def test_generate_and_parse_for_time_now_string(self):
         """generate_filename with for_time='now' string should generate a valid filename parseable back."""
@@ -153,8 +156,8 @@ class TestUtils(unittest.TestCase):
         self.assertEqual(cam_name, "camY")
 
     def test_parse_filename_empty_string(self):
-        """Parsing an empty string should safely return None."""
-        self.assertIsNone(parse_filename("", extension=".mp4"))
+        """Parsing an empty string should safely return (None, None)."""
+        self.assertEqual(parse_filename("", extension=".mp4"), (None, None))
 
     def test_parse_filename_long_camera_name(self):
         """Parsing should handle very long camera names without crashing."""
