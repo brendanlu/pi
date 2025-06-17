@@ -3,19 +3,25 @@ import sys
 sys.path.append(r"/home/brend/Documents")
 import timestamping
 
-LOGS_DIR_PATH = "/home/brend/Documents/diskmanage/logs"
-# LOGS_DIR_PATH = "/home/brend/Documents/opencv/logs"
+LOGS_DIR_PATHS_LIST = [
+    # "/home/brend/Documents/diskmanage/logs",
+    # "/home/brend/Documents/opencv/logs"
+]
 
-if __name__ == "__main__":
-    assert os.path.exists(LOGS_DIR_PATH) and os.path.isdir(LOGS_DIR_PATH)
-    to_clean = list(os.listdir(LOGS_DIR_PATH))
+def clean_logs_dir(dir_path):
+    assert os.path.exists(dir_path) and os.path.isdir(dir_path)
+    to_clean = list(os.listdir(dir_path))
     for f in to_clean:
         assert f.endswith(".log"), f"NON LOG FILE FOUND: {f}"
         assert timestamping.parse_filename(f, ".log"), f"MALFORMED LOG FILE FOUND: {f}"
-        fpath = os.path.join(LOGS_DIR_PATH, f)
+        fpath = os.path.join(dir_path, f)
         assert os.path.isfile(fpath)
         try:
             os.remove(fpath)
         except:
             RuntimeError(f"COULD NOT DELETE {f}")
     print(f"SUCCESSFULLY CLEANED {len(to_clean)} LOG FILES")
+
+if __name__ == "__main__":
+    for path in LOGS_DIR_PATHS_LIST: 
+        clean_logs_dir(path)

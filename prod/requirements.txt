@@ -1,0 +1,3 @@
+# this is additional to the raspberry pi system packages initially installed using
+# `python3 -m venv --system-site-packages .prod_venv`
+opencv-python-headless==4.11.0.86

@@ -13,6 +13,8 @@ import concurrent.futures
 sys.path.append(r"/home/brend/Documents")
 import timestamping
 
+# TODO: diskmanage, pushcut
+
 ###############################################################################
 # script config
 ###############################################################################
@@ -23,7 +25,7 @@ import timestamping
 
 # run `v4l2-ctl --list-devices` in terminal
 # if multiple found, run `v4l2-ctl -d /dev/video0 --all` to query which one is raw footage
-CAMERA_DEVICE_NUMBER = 0 
+USB_CAMERA_DEVICE_NUMBER = 0 
 
 # VID_LENGTH_SECONDS = 60 * 60
 VID_LENGTH_SECONDS = 15
@@ -74,7 +76,7 @@ def avi_convert_to_mp4(avi_fname) -> None:
     proc = None
     try:
         timestamp, _ = timestamping.parse_filename(avi_fname, extension=".avi")
-        mp4_fname = timestamping.generate_filename(for_time=timestamp, camera_name="TESTPiCam", extension=".mp4")
+        mp4_fname = timestamping.generate_filename(for_time=timestamp, camera_name="TESTUSBCam", extension=".mp4")
         mp4_fpath = os.path.join(USB_VID_PATH, mp4_fname)
         cmd = [
             "ffmpeg", # command-line tool ffmpeg for multimedia processing
@@ -167,7 +169,7 @@ if __name__ == "__main__":
     )
 
     logging.debug("Configuring cv2 camera...")
-    cap = cv2.VideoCapture(CAMERA_DEVICE_NUMBER)
+    cap = cv2.VideoCapture(USB_CAMERA_DEVICE_NUMBER)
     if not cap.isOpened():
         logging.critical("Cannot initialize video capture device")
         sys.exit(1)
