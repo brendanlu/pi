@@ -62,6 +62,10 @@ function updateTimestamp() {
     let displayTime = new Date(videoStart.getTime() + player.currentTime * 1000);
     timestampDisplay.textContent = "Timestamp: " + displayTime.toLocaleString();
 
+    // Display camera name
+    const cameraNameDisplay = document.getElementById("cameraName");
+    cameraNameDisplay.textContent = "Camera: " + (vid.camera_name || "Unknown camera");
+
     currentGlobalTime = computeGlobalTime();
 }
 

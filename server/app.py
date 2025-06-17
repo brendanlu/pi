@@ -6,9 +6,11 @@ from libcamera import Transform
 import cv2
 
 import atexit
+import json
 import logging
 import os
 import signal
+import subprocess 
 import sys
 import time
 from typing import List
@@ -16,10 +18,7 @@ from typing import List
 sys.path.append(r"/home/brend/Documents")
 import timestamping
 
-# todo: it should be able to handle files of differing length somehow
-# ideas: maybe blacken out the screen to show user during video seeking that
-# that whole chunk of time has no data
-VIDS_DURATION_SECONDS_ASSUMED = 15.0 # currently just hardcording this 15 seconds assumption
+VIDEO_DURATIONS_CACHE_PATH = "_video_durations.json"
 
 USB_DEVICE_NAME = "E657-3701"
 USB_PATH = os.path.join("/media/brend", USB_DEVICE_NAME)
@@ -55,6 +54,54 @@ def home():
 def fetch_mp4_files(videos_path: str) -> List[str]:
     return sorted([f for f in os.listdir(videos_path) if f.endswith(".mp4")])
 
+def try_load_json(path) -> dict:
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            logging.debug("Durations cache successfully accessed")
+            return json.load(f)
+    else:
+        logging.warning("Durations cache not found")
+        return {}
+
+def save_json(path, dict_: dict) -> None:
+    with open(path, "w") as f:
+        json.dump(dict_, f, indent=2)
+        logging.info("Video durations cached")
+
+def get_video_duration(fpath: str, cache: dict) -> float:
+    fname = os.path.basename(fpath)
+    if fname in cache:
+        if cache[fname] == -1: # error code on second time around
+            try:
+                duration = get_video_duration_ffprobe(fpath)
+                cache[fname] = duration
+            except:
+                cache[fname] == 0 # give up on this
+                logging.warning(f"{fpath} ffprobe call for duration has errored twice, and permanently stored in cache as error'ed")
+        return cache[fname]
+    else: 
+        try:
+            cache[fname] = get_video_duration_ffprobe(fpath)
+        except:
+            cache[fname] = -1 # error code
+        return cache[fname]
+
+def get_video_duration_ffprobe(fpath: str) -> float:
+    result = subprocess.run([
+        "ffprobe", "-v",
+        "error", "-select_streams",
+        "v:0", "-show_entries",
+        "format=duration", "-of",
+        "json",
+        fpath
+    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    
+    if result.returncode != 0:
+        raise RuntimeError(f"ffprobe failed on {fpath}: {result.stderr}")
+    
+    info = json.loads(result.stdout)
+    return float(info["format"]["duration"])
+    
 def generate_stream():
     logging.info("Stream initialized.")
     error_last_frame_flag = False
@@ -83,23 +130,53 @@ def generate_stream():
 
 @app.route("/playlist")
 def playlist():
+    logging.info("Fetching all .mp4 files into list...")
     try:
         mp4_files = fetch_mp4_files(USB_VID_PATH)
     except:
-        abort(404, description="Error fetching + sorting .mp4 files for playback")
-    try:
-        video_data = []
-        for mp4_file in mp4_files:
-            dt, camera_name = timestamping.parse_filename(mp4_file) # TODO: pass in camera_name to JS
-            if dt:
+        msg = "Error fetching + sorting .mp4 files for playback!"
+        logging.error(msg)
+        abort(404, description=msg)
+
+    durations_cache = try_load_json(VIDEO_DURATIONS_CACHE_PATH)
+    durations_cache_initial_size = len(durations_cache)
+    video_data = []
+
+    for mp4_file in mp4_files:
+        dt, camera_name = timestamping.parse_filename(mp4_file)
+        if not dt or not camera_name: 
+            logging.warning(f"Unable to parse file {mp4_file} for timestamp and camera name")
+            continue
+
+        logging.debug(f"Generating video metadata for {mp4_file}...")
+        try:
+            full_path = os.path.join(USB_VID_PATH, mp4_file)
+            vid_duration = get_video_duration(full_path, durations_cache)
+            if vid_duration > 0:
                 video_data.append({
                     "filename": mp4_file,
                     "start": timestamping.dt_strfmt(dt),
-                    "duration_seconds": VIDS_DURATION_SECONDS_ASSUMED
+                    "duration_seconds": vid_duration,
+                    "camera_name": camera_name
                 })
-        assert video_data
+            else:
+                logging.info(f"{mp4_file} has been processed as invalid length, and will be excluded from playback")
+        except:
+            logging.error(f"Problem calculating / fetching {mp4_file} video duration")
+
+    logging.debug("Saving videos durations cache...")
+    try:
+        save_json(VIDEO_DURATIONS_CACHE_PATH, durations_cache)
+        logging.info(f"Durations cache: {durations_cache_initial_size} cache size updated to {len(durations_cache)}")
     except:
-        abort(404, description="Error parsing filenames")
+        logging.critical(f"Issue saving videos durations cache to {VIDEO_DURATIONS_CACHE_PATH}")
+
+    if not video_data:
+        logging.critical("Unable to populate any videos")
+        abort(404, description="Error parsing filenames or generating video metadata")
+    else:
+        if len(video_data) < len(mp4_files):
+            logging.warning(f"{len(mp4_files) - len(video_data)} videos in drive unable to be processed and displayed")
 
     return jsonify(video_data)
 
@@ -137,6 +214,16 @@ if __name__ == "__main__":
             logging.StreamHandler()  # also prints to console
         ]
     )
+
+    # manage Flask/Werkzeug loggers
+    flask_log_handler = logging.FileHandler("flask_last.log", mode="w")
+    flask_log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+    for name in ('flask.app', 'werkzeug'):
+        flask_logger = logging.getLogger(name)
+        flask_logger.setLevel(logging.INFO)
+        flask_logger.propagate = False  # prevent double logging
+        flask_logger.handlers.clear()
+        flask_logger.addHandler(flask_log_handler)
 
     # initialize picam for stream
     picam2 = Picamera2()
