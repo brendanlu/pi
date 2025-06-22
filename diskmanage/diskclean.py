@@ -88,7 +88,7 @@ def auto_cleanup(
             break
     
     if (used_bytes - cleaned_bytes) / total_bytes > threshold_ratio:
-        logging.error(f"`auto_cleanup()`: after cleaning all cleanable video files, disk usage still exceeds threshold input: {threshold_ratio}")
+        logging.critical(f"`auto_cleanup()`: after cleaning all cleanable video files, disk usage still exceeds threshold input: {threshold_ratio}")
 
     return cleaned_bytes
 
