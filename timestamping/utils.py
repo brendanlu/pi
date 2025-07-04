@@ -5,7 +5,7 @@ generating log file names as well as camera names!
 
 from datetime import datetime
 import re
-from typing import Tuple, Callable
+from typing import Callable, Literal, Tuple
 import unittest
 
 TIMESTAMP_FMT = r"%Y%m%d_%H%M%S"
@@ -20,7 +20,7 @@ def _add_dot_to_extension(extension: str):
 
 def generate_filename(
         *,
-        for_time: datetime="now",
+        for_time: datetime|Literal["now"]|None="now",
         camera_name="camera1",
         extension=".mp4",
     ) -> str:
@@ -28,7 +28,7 @@ def generate_filename(
     wrong it's a massive headache, so all parameters are keyword ONLY by
     deliberate design.
     """
-    generate_now_timestamp: Callable[[None], str] = lambda: datetime.now().strftime(TIMESTAMP_FMT)
+    generate_now_timestamp: Callable[[], str] = lambda: datetime.now().strftime(TIMESTAMP_FMT)
     extension = _add_dot_to_extension(extension)
     if for_time == "now":
         timestamp = generate_now_timestamp()
