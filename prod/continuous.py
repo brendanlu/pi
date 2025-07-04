@@ -9,13 +9,10 @@ The key bits:
  -> critical errors notify phone via pushcut app
  -> disk storage management via simple diskmanage module
  -> TODO: real-time image processing which does not limit framerate
-"""
 
-import cv2
-from picamera2 import Picamera2
-from picamera2.encoders import H264Encoder
-from picamera2.outputs import FileOutput
-from libcamera import Transform
+Import the main function defined in this file, with a few hardware specific
+functions and configurations...and off you go...
+"""
 
 import atexit
 import logging
@@ -29,6 +26,7 @@ import threading
 
 from concurrent.futures import ProcessPoolExecutor
 from dotenv import load_dotenv
+from typing import Callable, cast
 
 sys.path.append(r"/home/brend/Documents")
 import timestamping
@@ -40,19 +38,11 @@ import diskmanage
 
 # -- pushcut
 load_dotenv()
-PUSHCUT_WEBHOOK_URL = os.getenv("PUSHCUT_WEBHOOK_URL")
+PUSHCUT_WEBHOOK_URL = cast(str, os.getenv("PUSHCUT_WEBHOOK_URL"))
 assert PUSHCUT_WEBHOOK_URL
-
-# -- camera hardware
-USB_CAMERA_DEVICE_NUMBER = 0  # for opencv
 
 # -- recording configuration
 VID_LENGTH_SECONDS = 15
-OPENCV_FPS = 20  # note picamera2 can adjust this automatically
-OPENCV_WIDTH = 640
-OPENCV_HEIGHT = 480
-PICAM_WIDTH = 1920
-PICAM_HEIGHT = 1080
 
 # -- logging
 CRITICAL_PHONE_ALERT = True
@@ -84,18 +74,7 @@ def cleanup():
     logging.info("FINAL SYSTEM CLEANUP: `cleanup()` COMPLETE!")
 
 
-def signal_handler(sig, frame):
-    """Signal handler for any program interruptions, this gets registered for
-    all processes
-    """
-    logging.info(
-        f"`signal_handler()`: signal {sig} recieved in PID {os.getpid()}, \
-            setting shutdown flag..."
-    )
-    shutdown_flag.set()
-
-
-def ok_dir(dir_path) -> bool:
+def ok_dir(dir_path: str) -> bool:
     return os.path.exists(dir_path) and os.path.isdir(dir_path)
 
 
@@ -113,38 +92,58 @@ class CriticalAlertHandler(logging.Handler):
             send_pushcut_notification(self.format(record))
 
 
-def record_to_temp_avi(cap: cv2.VideoCapture) -> str | None:
-    """Using opencv, records USB camera footage to .avi file"""
-    logging.debug("`record_to_temp_avi` called...")
-    if not cap.isOpened():
-        logging.critical("`record_to_temp_avi`: USB capture device error!")
-        return None
-
-
-def record_to_temp_h264(picam2: Picamera2, h264_encoder: H264Encoder) -> str | None:
-    pass
-
-
 ###############################################################################
-# script config
+# abtract driver function
 ###############################################################################
-shutdown_flag = threading.Event()
+def continuous_record_driver(
+    *,
+    camera_name: str,
+    initialise_hardware_function: Callable[[threading.Event], dict],
+    record_function: Callable[[threading.Event, int, dict], str],
+    processing_function: Callable[[str, str, int], None],
+    cleanup_function: Callable[[dict], None],
+):
+    """Details of functional abstraction (unless stated all functions receive
+    the threading.Event() `shutdown_flag` as their first arg):
+        - `initialise_hardware_function`
+            - <NIL input>
+            - <output> a dictionary of hardware objects
+        - `record_function`
+            - <input> recording length in seconds
+            - <input> a dictionary of hardware objects
+            - <output> text fname of temporary recording file
+        - `processing_function` : called via a ProcessPoolExecutor
+            - <DOES NOT RECIEVE THREADING.EVENT OBJ input>
+            - <input> text fname of temporary recording file
+            - <input> final output video directory path
+            - <input> timeout seconds
+            - <NIL output>
+        - `cleanup_function` : called during cleanup
+            - <input> a dictionary of hardware objects
+            - <NIL output>
+    """
+    # -- configure shutdown behaviour
+    shutdown_flag = threading.Event()
 
-atexit.register(cleanup)
-signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
-signal.signal(signal.SIGTERM, signal_handler)  # kill or system shutdown
-signal.signal(signal.SIGQUIT, signal_handler)  # quit signal
+    def signal_handler(sig, frame):
+        """Signal handler for any program interruptions, this gets registered
+        for all processes
+        """
+        logging.info(
+            f"`signal_handler()`: signal {sig} recieved in PID {os.getpid()}, setting shutdown flag..."
+        )
+        shutdown_flag.set()
 
+    atexit.register(cleanup)
+    signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
+    signal.signal(signal.SIGTERM, signal_handler)  # kill or system shutdown
+    signal.signal(signal.SIGQUIT, signal_handler)  # quit signal
 
-###############################################################################
-# main
-###############################################################################
-if __name__ == "__main__":
     # -- initialise logging
     assert ok_dir(LOGS_DIR_PATH)
     timestamped_log_fname = timestamping.generate_filename(
         # API was designed for camera recording in mind, but oh well...
-        camera_name="OPENCV_CONTINUOUS",
+        camera_name=camera_name,
         extension=".log",
     )
     logging.basicConfig(
@@ -164,27 +163,8 @@ if __name__ == "__main__":
         pushcut_notifier.setFormatter(logging.Formatter(LOG_FORMAT))
         logging.getLogger().addHandler(pushcut_notifier)
 
-    # -- initialise camera hardware
-    # ---- picamera
-    logging.debug("Configuring picamera2 and h264 encoder objects...")
-    picam2 = Picamera2()
-    video_config = picam2.create_video_configuration(
-        main={"size": (PICAM_WIDTH, PICAM_HEIGHT)},
-        transform=Transform(hflip=True, vflip=True),
-    )
-    picam2.configure(video_config)
-    h264_encoder = H264Encoder()
-    try:
-        picam2.start()
-    except:
-        logging.critical("Cannot start picamera")
-        shutdown_flag.set()
-    # ---- opencv USB camera
-    logging.debug("Configuring cv2 camera...")
-    cap = cv2.VideoCapture(USB_CAMERA_DEVICE_NUMBER)
-    if not cap.isOpened():
-        logging.critical("Cannot initialize USB video capture device")
-        shutdown_flag.set()
+    # -- initialise camera hardware into a dict of hardware objects
+    hardware_dict = initialise_hardware_function(shutdown_flag)
 
     # -- parallelism
     logging.info(f"Initializing ProcessPoolExecutor, main PID {os.getpid()}...")
@@ -196,12 +176,8 @@ if __name__ == "__main__":
     n_videos_recorded = 0
     n_videos_complete = 0
     processing_job_errors = 0
-    last_temp_avi_fname = None
-    last_temp_h264_fname = None
+    last_temp_fname = None
     try:
-        cap.set(cv2.CAP_PROP_FPS, OPENCV_FPS)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, OPENCV_WIDTH)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, OPENCV_HEIGHT)
         while not shutdown_flag.is_set():
 
             # ---- query existing jobs
@@ -213,14 +189,12 @@ if __name__ == "__main__":
                     except:
                         processing_job_errors += 1
                         logging.error(
-                            f"Exception caught in job, {processing_job_errors} \
-                                total job errors counted",
+                            f"Exception caught in job, {processing_job_errors} total job errors counted",
                             exc_info=True,
                         )
                         if processing_job_errors > JOB_ERRORS_UNTIL_SYS_EXIT:
                             logging.critical(
-                                f"{processing_job_errors} job exceptions caught, \
-                                    aborting recording loop"
+                                f"{processing_job_errors} job exceptions caught, aborting recording loop"
                             )
                             shutdown_flag.set()
 
@@ -232,14 +206,60 @@ if __name__ == "__main__":
                 logging.warning(f"Pending jobs >max workers of {WORKERS_LIMIT}")
             if n_pending_jobs > JOB_QUEUE_SIZE_UNTIL_SYS_EXIT:
                 logging.critical(
-                    f"Job queue is dangerously large with {n_pending_jobs} jobs \
-                        in queue!"
+                    f"Job queue is dangerously large with {n_pending_jobs} jobs in queue!"
                 )
                 shutdown_flag.set()
 
             # ---- recording and submitting processing jobs
-            last_temp_avi_fname = record_to_temp_avi(cap)
-            last_temp_h264_fname = record_to_temp_h264(picam2, h264_encoder)
+            last_temp_fname = record_function(
+                shutdown_flag, VID_LENGTH_SECONDS, hardware_dict
+            )
+            n_videos_recorded += 1
+            logging.info(
+                f"Video #{n_videos_recorded}, {last_temp_fname}, submitted for conversion..."
+            )
+            future = executor.submit(
+                processing_function,
+                last_temp_fname,
+                USB_VID_PATH,
+                SUBPROCESS_TIMEOUT_SECONDS,
+            )
+            futures.append(future)
 
     except:
-        pass
+        logging.critical(f"Continuous recording loop: caught exception!", exc_info=True)
+    finally:
+        logging.debug("Freeing hardware resources...")
+        cleanup_function(hardware_dict)
+
+    logging.debug("Querying any remaining processing workers now...")
+    for f in futures:
+        try:
+            f.result()
+            n_videos_complete += 1
+            logging.debug(f"{n_videos_complete} jobs complete!")
+        except:
+            logging.error("Exception caught in job", exc_info=True)
+    executor.shutdown(wait=True, cancel_futures=True)
+
+    # try to convert any half recorded file in case it was interrupted mid-way
+    # but conversion job was not submitted
+    if (
+        last_temp_fname
+        and os.path.exists(last_temp_fname)
+        and n_videos_recorded < n_videos_complete
+    ):
+        logging.warning(
+            f"{last_temp_fname} temp file still found, will attempt to process now..."
+        )
+        try:
+            processing_function(
+                last_temp_fname, USB_VID_PATH, SUBPROCESS_TIMEOUT_SECONDS
+            )
+            n_videos_complete += 1
+            logging.debug(f"{n_videos_complete} jobs complete!")
+        except:
+            logging.error(f"Processing for {last_temp_fname} FAILED.", exc_info=True)
+
+    logging.info(f"Continuous recording loop: {n_videos_complete} videos saved to .mp4")
+    logging.info("Driver script shutdown complete")
