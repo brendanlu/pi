@@ -112,7 +112,7 @@ def record_to_temp_avi(cap: cv2.VideoCapture) -> str:
         logging.critical("`record_to_temp_avi()`: not ready or not found capture device.")
         raise RuntimeError("Not ready or not found capture device.")
     
-    codec = cv2.VideoWriter_fourcc(*"MJPG")
+    codec = cv2.VideoWriter_fourcc(*"MJPG") # type: ignore
     avi_fname = timestamping.generate_filename(for_time="now", camera_name="TEMP", extension=".avi")
     writer = cv2.VideoWriter(avi_fname, codec, FPS, (WIDTH, HEIGHT))
     if not writer.isOpened():
