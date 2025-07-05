@@ -21,7 +21,6 @@ import requests
 import signal
 import subprocess
 import sys
-import time
 import threading
 
 from concurrent.futures import ProcessPoolExecutor
@@ -68,10 +67,6 @@ SUBPROCESS_TIMEOUT_SECONDS = VID_LENGTH_SECONDS * 2
 ###############################################################################
 # definitions
 ###############################################################################
-def cleanup():
-    """Invoked at the end of every script"""
-    logging.debug("FINAL SYSTEM CLEANUP: Running `cleanup()`...")
-    logging.info("FINAL SYSTEM CLEANUP: `cleanup()` COMPLETE!")
 
 
 def ok_dir(dir_path: str) -> bool:
@@ -208,6 +203,7 @@ def continuous_record_driver(
             - <input> timeout seconds
             - <NIL output>
         - `cleanup_function` : called during cleanup
+            - <DOES NOT RECIEVE THREADING.EVENT OBJ input>
             - <input> a dictionary of hardware objects
             - <NIL output>
     """
@@ -222,6 +218,11 @@ def continuous_record_driver(
             f"`signal_handler()`: signal {sig} recieved in PID {os.getpid()}, setting shutdown flag..."
         )
         shutdown_flag.set()
+
+    def cleanup():
+        """Invoked at the end of every script"""
+        logging.debug("FINAL SYSTEM CLEANUP: Running `cleanup()`...")
+        logging.info("FINAL SYSTEM CLEANUP: `cleanup()` COMPLETE!")
 
     atexit.register(cleanup)
     signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C

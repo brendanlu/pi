@@ -1,8 +1,6 @@
 import cv2
+
 import logging
-import os
-import signal
-import subprocess
 import sys
 import threading
 import time
@@ -11,7 +9,6 @@ from functools import partial
 
 from continuous import (
     continuous_record_driver,
-    ok_dir,
     ffmpeg_template_processing_function,
 )
 
@@ -90,9 +87,10 @@ def record_to_temp_avi(
                     raise RuntimeError(f"Failed frame after {frame_count} frames")
             writer.write(frame)
             frame_count += 1
-            if time.monotonic() - start_time >= secs:
+            time_elapsed = time.monotonic() - start_time
+            if time_elapsed >= secs:
                 logging.info(
-                    f"`record_to_temp_avi()` {avi_fname}: {secs}s video written to temp file"
+                    f"`record_to_temp_avi()` {avi_fname}: {time_elapsed:.1f}s video written to temp file"
                 )
                 break
     except:
