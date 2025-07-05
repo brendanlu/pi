@@ -7,10 +7,7 @@ import time
 
 from functools import partial
 
-from continuous import (
-    continuous_record_driver,
-    ffmpeg_template_processing_function,
-)
+from continuous import continuous_record_driver, ffmpeg_template_processing_function
 
 sys.path.append(r"/home/brend/Documents")
 import timestamping
@@ -18,7 +15,11 @@ import timestamping
 USB_CAMERA_DEVICE_NUMBER = 0
 OPENCV_WIDTH = 640
 OPENCV_HEIGHT = 480
-OPENCV_FPS = 20  # note picamera2 can adjust this automatically
+# note picamera2 can adjust this automatically, opencv fps is just a joke
+# because it's really up to the hardware, and unless you just dynamically
+# monitor it in the code it's going to be a bit shit when you hardcode it
+# into the video header via cv2.VideoWriter
+OPENCV_FPS = 19
 CAMERA_LABEL = "USB_CAMERA"
 
 
@@ -71,9 +72,9 @@ def record_to_temp_avi(
     # convert whatever we record regardless of if we encounter an exception midway
     try:
         while True:
-            ret, frame = (
-                cap.read()
-            )  # captures EVERY frame even if camera write to a buffer
+            # captures EVERY frame even if camera write to a buffer because
+            # it's quicker than processing
+            ret, frame = cap.read()
             if not ret:
                 if shutdown_flag.is_set():
                     logging.warning(
@@ -99,6 +100,9 @@ def record_to_temp_avi(
             exc_info=True,
         )
     finally:
+        logging.debug(
+            f"`record_to_temp_avi()` {avi_fname}: effective framerate was {frame_count/(time.monotonic()-start_time)}fps"
+        )
         writer.release()
         logging.debug(
             f"`record_to_temp_avi()` {avi_fname}: writer for {avi_fname} released."
