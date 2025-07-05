@@ -92,6 +92,95 @@ class CriticalAlertHandler(logging.Handler):
             send_pushcut_notification(self.format(record))
 
 
+def ffmpeg_template_processing_function(
+    in_fname: str,
+    out_dirpath: str,
+    timeout_secs: int,
+    *,
+    base_cmd: list[str | None],
+    in_extension: str,
+    camera_name: str,
+    function_logging_label: str,
+) -> None:
+    """Templace for a function that matches the signature required by the
+    driver below, once the keyword arguments have been frozen to a
+    configuration
+
+    Performs conversion of a video intermediate via ffmpeg to a mp4 file
+    compatible with web app streaming
+
+    It expects the base_cmd to leave exactly two None placeholders, the first
+    will be replaced by the input fpath, and the second by the output fpath
+
+    e.g.
+    base_cmd = [
+        "ffmpeg",  # command-line tool ffmpeg for multimedia processing
+        "-y",  # output overwrites any files with same name
+        "-i", None,  # input placeholder
+        "-c:v", "libx264",  # use the H.264 encoder (libx264)
+        "-preset", "fast",  # encoding speed/quality trade-off preset
+        "-crf", "23",  # constant rate factor — lower = better quality & bigger file; 23 is default
+        "-pix_fmt", "yuv420p",  # output pixel format: yuv420p generally compatible with most browsers
+        None,  # output placeholder
+    ]
+    """
+
+    assert (
+        base_cmd.count(None) == 2
+    ), "base_cmd must contain exactly two None placeholders"
+    assert (
+        base_cmd[base_cmd.index(None) - 1] == "-i"
+    ), "base_cmd first None must follow '-i'"
+    assert base_cmd[-1] is None, "base_cmd second None must be at the end"
+
+    logging.debug(
+        f"`{function_logging_label}()` PID {os.getpid()}: Processing job for {in_fname} starting..."
+    )
+    if not ok_dir(out_dirpath):
+        logging.critical(
+            f"`{function_logging_label}()` PID {os.getpid()}: issue with video output directory"
+        )
+        raise RuntimeError("Issue with video output directory")
+
+    proc = None
+    try:
+        timestamp, _ = timestamping.parse_filename(in_fname, extension=in_extension)
+        out_fname = timestamping.generate_filename(
+            for_time=timestamp, camera_name=camera_name, extension=".mp4"
+        )
+        out_fpath = os.path.join(out_dirpath, out_fname)
+        cmd = base_cmd.copy()
+        cmd[cmd.index(None)] = in_fname
+        cmd[cmd.index(None)] = out_fpath
+        # appease pylance, due to assertions at the start and the processing
+        # lines above we can be sure of this
+        cmd = cast(list[str], cmd)
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            preexec_fn=os.setsid,
+        )
+        _, stderr = proc.communicate(timeout=timeout_secs)
+        os.remove(in_fname)
+        if proc.returncode != 0:
+            logging.error(
+                f"`{function_logging_label}()` PID {os.getpid()}: subprocess error -> {stderr.decode()}"
+            )
+            raise RuntimeError(f"Subprocess error")
+        logging.info(
+            f"`{function_logging_label}()` PID {os.getpid()}: Process job for {in_fname} successfully complete, output to {out_fpath}"
+        )
+    except:
+        logging.critical(
+            f"`{function_logging_label}()` PID {os.getpid()}: Processing job for {in_fname} FAILED.",
+            exc_info=True,
+        )
+        if proc:
+            os.killpg(proc.pid, signal.SIGTERM)
+        raise RuntimeError(f"Processing job for {in_fname} FAILED.")
+
+
 ###############################################################################
 # abtract driver function
 ###############################################################################
