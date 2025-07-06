@@ -16,14 +16,15 @@ byte_dict = {"kb": KB, "mb": MB, "gb": GB}
 
 # TODO: NEED TO TUNE / CALCULATE THIS DEPENDING ON HOW OFTEN THIS WILL BE RUN
 # AND THE SIZE OF THE STORAGE DISK
-THRESHOLD = 0.8
+THRESHOLD = 0.9
 
 USB_DEVICE_NAME = "E657-3701"
 USB_PATH = os.path.join("/media/brend", USB_DEVICE_NAME)
-USB_VID_PATH = os.path.join(USB_PATH, "vidfiles")
+# USB_VID_PATH = os.path.join(USB_PATH, "vidfiles")
+USB_VID_PATH = USB_PATH
 LOGS_DIR_PATH = "/home/brend/Documents/diskmanage/logs"
 
-def get_usb_usage(path: str, units_input: str = None):
+def get_usb_usage(path: str, units_input: str | None = None):
     """Wrapper around shutil.disk_usage that returns:
         - total 
         - used
