@@ -207,11 +207,11 @@ def serve_video(filename):
 if __name__ == "__main__": 
     # initialize logger
     logging.basicConfig(
-        level=logging.INFO,  # Decreasing verbosity: DEBUG, INFO, WARNING, ERROR, CRITICAL
+        level=logging.DEBUG,  # Decreasing verbosity: DEBUG, INFO, WARNING, ERROR, CRITICAL
         format='%(asctime)s [%(levelname)s] %(message)s',
         handlers=[
             logging.FileHandler("app_last.log", mode="w"),
-            logging.StreamHandler()  # also prints to console
+            # logging.StreamHandler()  # also prints to console
         ]
     )
 
@@ -220,17 +220,20 @@ if __name__ == "__main__":
     flask_log_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
     for name in ('flask.app', 'werkzeug'):
         flask_logger = logging.getLogger(name)
-        flask_logger.setLevel(logging.INFO)
+        flask_logger.setLevel(logging.DEBUG)
         flask_logger.propagate = False  # prevent double logging
         flask_logger.handlers.clear()
         flask_logger.addHandler(flask_log_handler)
 
-    # initialize picam for stream
-    picam2 = Picamera2()
-    picam2.configure(picam2.create_preview_configuration(
-        main={"size": (640, 480)},
-        transform=Transform(hflip=True, vflip=True)
-    ))
-    picam2.start()
+    try:
+        # initialize picam for stream
+        picam2 = Picamera2()
+        picam2.configure(picam2.create_preview_configuration(
+            main={"size": (640, 480)},
+            transform=Transform(hflip=True, vflip=True)
+        ))
+        picam2.start()
+    except:
+        logging.error(f"Unable to initialize camera for stream")
 
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
