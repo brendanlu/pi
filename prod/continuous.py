@@ -41,7 +41,7 @@ PUSHCUT_WEBHOOK_URL = cast(str, os.getenv("PUSHCUT_WEBHOOK_URL"))
 assert PUSHCUT_WEBHOOK_URL
 
 # -- recording configuration
-VID_LENGTH_SECONDS = 15
+VID_LENGTH_SECONDS = 120
 
 # -- logging
 CRITICAL_PHONE_ALERT = True
@@ -267,9 +267,8 @@ def continuous_record_driver(
     n_videos_complete = 0
     processing_job_errors = 0
     last_temp_fname = None
-    try:
-        while not shutdown_flag.is_set():
-
+    while not shutdown_flag.is_set():
+        try:
             # ---- query existing jobs
             for f in futures:
                 if f.done():
@@ -316,13 +315,15 @@ def continuous_record_driver(
             )
             futures.append(future)
 
-    except:
-        logging.critical(f"Continuous recording loop: caught exception!", exc_info=True)
-    finally:
-        logging.debug("Freeing hardware resources...")
-        cleanup_function(hardware_dict)
+        except:
+            logging.critical(
+                f"Continuous recording loop: caught exception!", exc_info=True
+            )
 
-    logging.debug("Querying any remaining processing workers now...")
+    logging.info("Freeing hardware resources...")
+    cleanup_function(hardware_dict)
+
+    logging.info("Querying any remaining processing workers now...")
     for f in futures:
         try:
             f.result()

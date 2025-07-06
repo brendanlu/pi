@@ -19,7 +19,7 @@ OPENCV_HEIGHT = 480
 # because it's really up to the hardware, and unless you just dynamically
 # monitor it in the code it's going to be a bit shit when you hardcode it
 # into the video header via cv2.VideoWriter
-OPENCV_FPS = 19
+OPENCV_FPS = 20
 CAMERA_LABEL = "USB_CAMERA"
 
 
@@ -72,8 +72,6 @@ def record_to_temp_avi(
     # convert whatever we record regardless of if we encounter an exception midway
     try:
         while True:
-            # captures EVERY frame even if camera write to a buffer because
-            # it's quicker than processing
             ret, frame = cap.read()
             if not ret:
                 if shutdown_flag.is_set():
@@ -107,6 +105,7 @@ def record_to_temp_avi(
         logging.debug(
             f"`record_to_temp_avi()` {avi_fname}: writer for {avi_fname} released."
         )
+        # todo: when main driver improved, raise error here if frame_count==0
         return avi_fname  # still return the name to try and convert and save as mp4
 
 
