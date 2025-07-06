@@ -9,17 +9,13 @@
     <h1>Available Videos</h1>
     <a href="{{ url_for('home') }}">⬅️ Back to Home</a>
     <ul>
-        {% for file in files %}
-        <li>
-            <a href="/video/{{ file }}">{{ file }}</a><br>
-            <video width="480" controls>
-                <source src="/video/{{ file }}" type="video/mp4">
-                Your browser does not support the video tag.
-            </video>
-        </li>
-        {% else %}
-        <li>No videos found in the directory.</li>
-        {% endfor %}
-    </ul>
+    {% for file in files %}
+    <li>
+        <a href="{{ url_for('serve_video', filename=file) }}">{{ file }}</a>
+    </li>
+    {% else %}
+    <li>No videos found in the directory.</li>
+    {% endfor %}
+</ul>
 </body>
 </html>
