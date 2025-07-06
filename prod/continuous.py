@@ -41,7 +41,7 @@ PUSHCUT_WEBHOOK_URL = cast(str, os.getenv("PUSHCUT_WEBHOOK_URL"))
 assert PUSHCUT_WEBHOOK_URL
 
 # -- recording configuration
-VID_LENGTH_SECONDS = 120
+VID_LENGTH_SECONDS = 5 * 60
 
 # -- logging
 CRITICAL_PHONE_ALERT = True
@@ -50,7 +50,7 @@ LOGS_DIR_PATH = "/home/brend/Documents/prod/logs"
 LOG_FILE_LOG_LEVEL = logging.DEBUG
 
 # -- memory disk
-USB_DEVICE_NAME = "E657-3701"
+USB_DEVICE_NAME = "DYNABOOK"
 USB_PATH = os.path.join("/media/brend", USB_DEVICE_NAME)
 USB_VID_PATH = os.path.join(USB_PATH, "vidfiles")
 
