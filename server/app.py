@@ -21,6 +21,7 @@ import timestamping
 VIDEO_DURATIONS_CACHE_PATH = "_video_durations.json"
 
 USB_DEVICE_NAME = "E657-3701"
+# USB_DEVICE_NAME = "DYNABOOK"
 USB_PATH = os.path.join("/media/brend", USB_DEVICE_NAME)
 USB_VID_PATH = os.path.join(USB_PATH, "vidfiles")
 
