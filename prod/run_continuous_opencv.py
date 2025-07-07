@@ -7,8 +7,6 @@ import sys
 import threading
 import time
 
-from functools import partial
-
 from continuous import (
     continuous_record_driver,
     ffmpeg_template_processing_function,
@@ -23,11 +21,12 @@ import timestamping
 USB_CAMERA_DEVICE_NUMBER = 0
 OPENCV_WIDTH = 640
 OPENCV_HEIGHT = 480
-# note picamera2 can adjust this automatically, opencv fps is just a joke
-# because it's really up to the hardware, and unless you just dynamically
-# monitor it in the code it's going to be a bit shit when you hardcode it
-# into the video header via cv2.VideoWriter
-OPENCV_FPS = 19.93
+# we will try to automatically enforce this by throttling our capture loop
+# because opencv cap.set() does not really do anything
+# cheap USB camera hardware appears to record ~20fps at night and ~30fps during
+# the day; attempt to throttle to 19fps which also has the added benefit of
+# less frames for live-time image processing
+OPENCV_FPS = 19
 CAMERA_LABEL = "USB_CAMERA"
 
 
@@ -57,7 +56,7 @@ def initialise_opencv(shutdown_flag: threading.Event) -> dict:
 
 def record_to_temp_avi(
     shutdown_flag: threading.Event, secs: int, hardware: dict
-) -> str:
+) -> tuple[str, dict]:
     """Using opencv, records USB camera footage to .avi file"""
     try:
         cap = hardware["cap"]
@@ -82,16 +81,20 @@ def record_to_temp_avi(
         raise RuntimeError("VideoWriter failed to initialize")
 
     logging.info(f"`record_to_temp_avi()` {avi_fname}: recording {secs}s video now...")
-    start_time = time.monotonic()
-    frame_count = 0
-    over_brightness_threshold_frame_count = 0
-    mean_brightness_event_flag = False
     # the key design idea below: we always want to try and store, and later
     # convert whatever we record regardless of if we encounter an exception midway
     try:
+        frame_count = 0
+        over_brightness_threshold_frame_count = 0
+        mean_brightness_event_flag = False
+        time_per_frame = 1.0 / OPENCV_FPS
+        start_time = time.monotonic()
         while True:
+            frame_start_time = time.monotonic()
+
+            # opencv boilerplate
             ret, frame = cap.read()
-            if not ret:
+            if not ret or shutdown_flag.is_set():
                 if shutdown_flag.is_set():
                     logging.warning(
                         f"`record_to_temp_avi()` {avi_fname}: interrupted after {frame_count} frames"
@@ -101,11 +104,12 @@ def record_to_temp_avi(
                     logging.error(
                         f"`record_to_temp_avi()` {avi_fname}: failed frame after {frame_count} frames"
                     )
-                    raise RuntimeError(f"Failed frame after {frame_count} frames")
+                    break
             writer.write(frame)
             frame_count += 1
 
-            # best to put all processing into separate try-except block
+            # put all processing into try block to avoid crashing on processing
+            # code
             try:
                 if is_over_mean_bright_threshold(frame, MEAN_BRIGHTNESS_THRESHOLD):
                     if over_brightness_threshold_frame_count == 0:
@@ -131,27 +135,84 @@ def record_to_temp_avi(
                     f"`record_to_temp_avi()` {avi_fname}: processing for frame {frame_count} FAILED"
                 )
 
+            # check if video duration elapsed
             time_elapsed = time.monotonic() - start_time
             if time_elapsed >= secs:
                 logging.info(
-                    f"`record_to_temp_avi()` {avi_fname}: {time_elapsed:.1f}s video written to temp file"
+                    f"`record_to_temp_avi()` {avi_fname}: full {time_elapsed:.1f}s video written to temp file"
                 )
                 break
+
+            # sleep to throttle to fps if not
+            frame_time_elapsed = time.monotonic() - frame_start_time
+            time.sleep(max(0, time_per_frame - frame_time_elapsed))
+
     except:
         logging.error(
             f"`record_to_temp_avi()` {avi_fname}: exception raise in recording loop",
             exc_info=True,
         )
     finally:
+        # most cheap USB camera's won't give a shit what fps you pass into it
+        # so we get a mean here to pass into ffmpeg
+        # nb. this will make the video patchy as the actual recording fps
+        # was dynamic, but oh well...
+        effective_mean_fps = frame_count / (time.monotonic() - start_time)
         logging.debug(
-            f"`record_to_temp_avi()` {avi_fname}: effective framerate was {frame_count/(time.monotonic()-start_time)}fps"
+            f"`record_to_temp_avi()` {avi_fname}: effective framerate was {effective_mean_fps}fps"
         )
         writer.release()
         logging.debug(
             f"`record_to_temp_avi()` {avi_fname}: writer for {avi_fname} released."
         )
-        # todo: when main driver improved, raise error here if frame_count==0
-        return avi_fname  # still return the name to try and convert and save as mp4
+        # TODO: when main driver improved, raise error here if frame_count==0
+        # still return the name to try and convert and save as mp4
+        return avi_fname, dict(mean_fps=effective_mean_fps)
+
+
+def avi_convert_to_mp4(
+    in_fname: str, out_dirpath: str, timeout_secs: int, dynamic_configs: dict
+):
+    base_cmd = [
+        "ffmpeg",  # command-line tool ffmpeg for multimedia processing
+        "-y",  # output overwrites any files with same name
+        "-i",
+        None,  # input placeholder
+        "-c:v",
+        "libx264",  # use the H.264 encoder (libx264)
+        "-preset",
+        "fast",  # encoding speed/quality trade-off preset
+        "-crf",
+        "23",  # constant rate factor — lower = better quality & bigger file; 23 is default
+        "-pix_fmt",
+        "yuv420p",  # output pixel format: yuv420p generally compatible with most browsers
+        None,  # output placeholder
+    ]
+
+    # put dynamic configs in try block
+    try:
+        if "mean_fps" in dynamic_configs:
+            iflag_index = base_cmd.index("-i")
+            mean_fps: float = dynamic_configs["mean_fps"]
+            base_cmd.insert(iflag_index, str(mean_fps))
+            base_cmd.insert(iflag_index, "-r")
+            logging.debug(
+                f"`avi_convert_to_mp4()` {in_fname}: attempt to process with {mean_fps}fps"
+            )
+        else:
+            logging.warning(f"`avi_convert_to_mp4()` {in_fname}: no dynamic fps found for processing")
+    except:
+        logging.error(f"`avi_convert_to_mp4()` {in_fname}: exception occured in applying dynamic config")
+
+    return ffmpeg_template_processing_function(
+        in_fname,
+        out_dirpath,
+        timeout_secs,
+        base_cmd=base_cmd,
+        in_extension=".avi",
+        camera_name=CAMERA_LABEL,
+        function_logging_label="avi_convert_to_mp4",
+    )
 
 
 def cleanup_opencv(hardware: dict):
@@ -181,29 +242,6 @@ if __name__ == "__main__":
     events_logger.addHandler(events_handler)
     events_logger.setLevel(EVENT_LOG_FILE_LOG_LEVEL)
     events_logger.propagate = False
-
-    # partial out template ffmpeg wrapper to suit hardware in this file
-    avi_convert_to_mp4 = partial(
-        ffmpeg_template_processing_function,
-        base_cmd=[
-            "ffmpeg",  # command-line tool ffmpeg for multimedia processing
-            "-y",  # output overwrites any files with same name
-            "-i",
-            None,  # input placeholder
-            "-c:v",
-            "libx264",  # use the H.264 encoder (libx264)
-            "-preset",
-            "fast",  # encoding speed/quality trade-off preset
-            "-crf",
-            "23",  # constant rate factor — lower = better quality & bigger file; 23 is default
-            "-pix_fmt",
-            "yuv420p",  # output pixel format: yuv420p generally compatible with most browsers
-            None,  # output placeholder
-        ],
-        in_extension=".avi",
-        camera_name=CAMERA_LABEL,
-        function_logging_label="avi_convert_to_mp4",
-    )
 
     continuous_record_driver(
         camera_name=CAMERA_LABEL,

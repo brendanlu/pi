@@ -50,7 +50,8 @@ LOGS_DIR_PATH = "/home/brend/Documents/prod/logs"
 LOG_FILE_LOG_LEVEL = logging.DEBUG
 
 # -- memory disk
-USB_DEVICE_NAME = "DYNABOOK"
+USB_DEVICE_NAME = "E657-3701"
+# USB_DEVICE_NAME = "DYNABOOK"
 USB_PATH = os.path.join("/media/brend", USB_DEVICE_NAME)
 USB_VID_PATH = os.path.join(USB_PATH, "vidfiles")
 
@@ -157,12 +158,13 @@ def ffmpeg_template_processing_function(
             preexec_fn=os.setsid,
         )
         _, stderr = proc.communicate(timeout=timeout_secs)
-        os.remove(in_fname)
         if proc.returncode != 0:
             logging.error(
                 f"`{function_logging_label}()` PID {os.getpid()}: subprocess error -> {stderr.decode()}"
             )
             raise RuntimeError(f"Subprocess error")
+        else:
+            os.remove(in_fname)
         logging.info(
             f"`{function_logging_label}()` PID {os.getpid()}: Process job for {in_fname} successfully complete, output to {out_fpath}"
         )
@@ -183,8 +185,8 @@ def continuous_record_driver(
     *,
     camera_name: str,
     initialise_hardware_function: Callable[[threading.Event], dict],
-    record_function: Callable[[threading.Event, int, dict], str],
-    processing_function: Callable[[str, str, int], None],
+    record_function: Callable[[threading.Event, int, dict], tuple[str, dict]],
+    processing_function: Callable[[str, str, int, dict], None],
     cleanup_function: Callable[[dict], None],
 ):
     """Details of functional abstraction (unless stated all functions receive
@@ -196,11 +198,13 @@ def continuous_record_driver(
             - <input> recording length in seconds
             - <input> a dictionary of hardware objects
             - <output> text fname of temporary recording file
+            - <output> a dictionary of dynamic processing configs for the video
         - `processing_function` : called via a ProcessPoolExecutor
             - <DOES NOT RECIEVE THREADING.EVENT OBJ input>
             - <input> text fname of temporary recording file
             - <input> final output video directory path
             - <input> timeout seconds
+            - <input> a dictionary of dynamic processing configs for the video
             - <NIL output>
         - `cleanup_function` : called during cleanup
             - <DOES NOT RECIEVE THREADING.EVENT OBJ input>
@@ -300,7 +304,7 @@ def continuous_record_driver(
                 shutdown_flag.set()
 
             # ---- recording and submitting processing jobs
-            last_temp_fname = record_function(
+            last_temp_fname, last_dynamic_processing_configs = record_function(
                 shutdown_flag, VID_LENGTH_SECONDS, hardware_dict
             )
             n_videos_recorded += 1
@@ -312,6 +316,7 @@ def continuous_record_driver(
                 last_temp_fname,
                 USB_VID_PATH,
                 SUBPROCESS_TIMEOUT_SECONDS,
+                last_dynamic_processing_configs,
             )
             futures.append(future)
 
@@ -345,7 +350,10 @@ def continuous_record_driver(
         )
         try:
             processing_function(
-                last_temp_fname, USB_VID_PATH, SUBPROCESS_TIMEOUT_SECONDS
+                last_temp_fname,
+                USB_VID_PATH,
+                SUBPROCESS_TIMEOUT_SECONDS,
+                last_dynamic_processing_configs,
             )
             n_videos_complete += 1
             logging.debug(f"{n_videos_complete} jobs complete!")
