@@ -18,10 +18,10 @@ byte_dict = {"kb": KB, "mb": MB, "gb": GB}
 # AND THE SIZE OF THE STORAGE DISK
 THRESHOLD = 0.9
 
-USB_DEVICE_NAME = "E657-3701"
+# USB_DEVICE_NAME = "E657-3701"
+USB_DEVICE_NAME = "DYNABOOK"
 USB_PATH = os.path.join("/media/brend", USB_DEVICE_NAME)
-# USB_VID_PATH = os.path.join(USB_PATH, "vidfiles")
-USB_VID_PATH = USB_PATH
+USB_VID_PATH = os.path.join(USB_PATH, "vidfiles")
 LOGS_DIR_PATH = "/home/brend/Documents/diskmanage/logs"
 
 def get_usb_usage(path: str, units_input: str | None = None):

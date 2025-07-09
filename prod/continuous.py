@@ -50,8 +50,8 @@ LOGS_DIR_PATH = "/home/brend/Documents/prod/logs"
 LOG_FILE_LOG_LEVEL = logging.DEBUG
 
 # -- memory disk
-USB_DEVICE_NAME = "E657-3701"
-# USB_DEVICE_NAME = "DYNABOOK"
+# USB_DEVICE_NAME = "E657-3701"
+USB_DEVICE_NAME = "DYNABOOK"
 USB_PATH = os.path.join("/media/brend", USB_DEVICE_NAME)
 USB_VID_PATH = os.path.join(USB_PATH, "vidfiles")
 
