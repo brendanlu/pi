@@ -54,10 +54,26 @@ def initialise_opencv(shutdown_flag: threading.Event) -> dict:
     return dict(cap=cap)
 
 
+# global vars to persist between each recording call
+over_brightness_threshold_frame_count = 0
+mean_brightness_event_flag = False
+
+
 def record_to_temp_avi(
     shutdown_flag: threading.Event, secs: int, hardware: dict
 ) -> tuple[str, dict]:
     """Using opencv, records USB camera footage to .avi file"""
+    global over_brightness_threshold_frame_count, mean_brightness_event_flag
+
+    # copy globals into locals to avoid slow access during tight recording
+    # loop below; due to Python implementation details
+    over_brightness_threshold_frame_count_local_copy = (
+        over_brightness_threshold_frame_count
+    )
+    mean_brightness_event_flag_local_copy = mean_brightness_event_flag
+
+    frame_count = 0
+    # -- initialise hardware and file writer
     try:
         cap = hardware["cap"]
     except:
@@ -80,15 +96,13 @@ def record_to_temp_avi(
         )
         raise RuntimeError("VideoWriter failed to initialize")
 
+    # -- begin recording
     logging.info(f"`record_to_temp_avi()` {avi_fname}: recording {secs}s video now...")
     # the key design idea below: we always want to try and store, and later
     # convert whatever we record regardless of if we encounter an exception midway
     try:
-        frame_count = 0
-        over_brightness_threshold_frame_count = 0
-        mean_brightness_event_flag = False
         time_per_frame = 1.0 / OPENCV_FPS
-        start_time = time.monotonic()
+        recording_start_time = time.monotonic()
         while True:
             frame_start_time = time.monotonic()
 
@@ -112,39 +126,43 @@ def record_to_temp_avi(
             # code
             try:
                 if is_over_mean_bright_threshold(frame, MEAN_BRIGHTNESS_THRESHOLD):
-                    if over_brightness_threshold_frame_count == 0:
+                    if over_brightness_threshold_frame_count_local_copy == 0:
                         events_logger.debug(
                             f"{avi_fname}: Mean brightness threshold exceeded on frame {frame_count}"
                         )
-                    over_brightness_threshold_frame_count += 1
+                    over_brightness_threshold_frame_count_local_copy += 1
                 else:
-                    over_brightness_threshold_frame_count = 0
-                    mean_brightness_event_flag = False
+                    over_brightness_threshold_frame_count_local_copy = 0
+                    mean_brightness_event_flag_local_copy = False
 
                 if (
-                    over_brightness_threshold_frame_count
+                    over_brightness_threshold_frame_count_local_copy
                     >= FRAMES_IN_A_ROW_FOR_BRIGHTNESS_EVENT
-                    and not mean_brightness_event_flag
+                    and not mean_brightness_event_flag_local_copy
                 ):
                     events_logger.info(
                         f"{avi_fname}: Mean brightness event on frame {frame_count}"
                     )
-                    mean_brightness_event_flag = True
+                    mean_brightness_event_flag_local_copy = True
             except:
                 logging.error(
                     f"`record_to_temp_avi()` {avi_fname}: processing for frame {frame_count} FAILED"
                 )
 
             # check if video duration elapsed
-            time_elapsed = time.monotonic() - start_time
+            time_elapsed = time.monotonic() - recording_start_time
             if time_elapsed >= secs:
                 logging.info(
                     f"`record_to_temp_avi()` {avi_fname}: full {time_elapsed:.1f}s video written to temp file"
                 )
                 break
 
-            # sleep to throttle to fps if not
+            # sleep to throttle to fps
             frame_time_elapsed = time.monotonic() - frame_start_time
+            if frame_time_elapsed > time_per_frame:
+                logging.warning(
+                    f"`record_to_temp_avi()` {avi_fname}: {frame_time_elapsed:.4f}s long frame time on frame {frame_count}"
+                )
             time.sleep(max(0, time_per_frame - frame_time_elapsed))
 
     except:
@@ -157,7 +175,7 @@ def record_to_temp_avi(
         # so we get a mean here to pass into ffmpeg
         # nb. this will make the video patchy as the actual recording fps
         # was dynamic, but oh well...
-        effective_mean_fps = frame_count / (time.monotonic() - start_time)
+        effective_mean_fps = frame_count / (time.monotonic() - recording_start_time)
         logging.debug(
             f"`record_to_temp_avi()` {avi_fname}: effective framerate was {effective_mean_fps}fps"
         )
@@ -167,6 +185,14 @@ def record_to_temp_avi(
         )
         # TODO: when main driver improved, raise error here if frame_count==0
         # still return the name to try and convert and save as mp4
+
+        # make sure to save local values back into globals to persist into
+        # next function call
+        over_brightness_threshold_frame_count = (
+            over_brightness_threshold_frame_count_local_copy
+        )
+        mean_brightness_event_flag = mean_brightness_event_flag_local_copy
+
         return avi_fname, dict(mean_fps=effective_mean_fps)
 
 
@@ -200,9 +226,13 @@ def avi_convert_to_mp4(
                 f"`avi_convert_to_mp4()` {in_fname}: attempt to process with {mean_fps}fps"
             )
         else:
-            logging.warning(f"`avi_convert_to_mp4()` {in_fname}: no dynamic fps found for processing")
+            logging.warning(
+                f"`avi_convert_to_mp4()` {in_fname}: no dynamic fps found for processing"
+            )
     except:
-        logging.error(f"`avi_convert_to_mp4()` {in_fname}: exception occured in applying dynamic config")
+        logging.error(
+            f"`avi_convert_to_mp4()` {in_fname}: exception occured in applying dynamic config"
+        )
 
     return ffmpeg_template_processing_function(
         in_fname,
