@@ -34,7 +34,7 @@ CAMERA_LABEL = "USB_CAMERA"
 EVENT_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
 EVENT_LOGS_DIR_PATH = "/home/brend/Documents/prod/event_logs"
 EVENT_LOG_FILE_LOG_LEVEL = logging.DEBUG
-MEAN_BRIGHTNESS_THRESHOLD = 10
+MEAN_BRIGHTNESS_THRESHOLD = 15
 FRAMES_IN_A_ROW_FOR_BRIGHTNESS_EVENT = OPENCV_FPS * 2
 
 
@@ -159,10 +159,10 @@ def record_to_temp_avi(
 
             # sleep to throttle to fps
             frame_time_elapsed = time.monotonic() - frame_start_time
-            if frame_time_elapsed > time_per_frame:
-                logging.warning(
-                    f"`record_to_temp_avi()` {avi_fname}: {frame_time_elapsed:.4f}s long frame time on frame {frame_count}"
-                )
+            # if frame_time_elapsed > time_per_frame:
+            #     logging.warning(
+            #         f"`record_to_temp_avi()` {avi_fname}: {frame_time_elapsed:.4f}s long frame time on frame {frame_count}"
+            #     )
             time.sleep(max(0, time_per_frame - frame_time_elapsed))
 
     except:
