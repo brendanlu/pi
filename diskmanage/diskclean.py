@@ -113,4 +113,4 @@ if __name__ == "__main__":
         # run some sort of loop here
         auto_cleanup(monitor_path=USB_PATH, clean_path=USB_VID_PATH, threshold_ratio=THRESHOLD)
     except:
-        logging.critical("main: `auto_cleanup()` call caused exception")
+        logging.critical("main: `auto_cleanup()` call caused exception", exc_info=True)
