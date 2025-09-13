@@ -6,6 +6,10 @@ from pathlib import Path
 import os
 import sys
 import shutil
+import time
+
+from datetime import datetime, timedelta
+
 sys.path.append(r"/home/brend/Documents")
 import timestamping
 
@@ -16,7 +20,7 @@ byte_dict = {"kb": KB, "mb": MB, "gb": GB}
 
 # TODO: NEED TO TUNE / CALCULATE THIS DEPENDING ON HOW OFTEN THIS WILL BE RUN
 # AND THE SIZE OF THE STORAGE DISK
-THRESHOLD = 0.9
+THRESHOLD = 0.95
 
 # USB_DEVICE_NAME = "E657-3701"
 USB_DEVICE_NAME = "DYNABOOK"
@@ -55,7 +59,7 @@ def auto_cleanup(
     """
     assert os.path.exists(monitor_path) and os.path.isdir(monitor_path)
     assert os.path.exists(clean_path) and os.path.isdir(clean_path)
-    assert isinstance(threshold_ratio, float) and 0.5 < threshold_ratio < 1
+    assert isinstance(threshold_ratio, float) and 0.1 < threshold_ratio < 1
     assert_subpath(child_path=clean_path, parent_path=monitor_path)
     logging.info(f"`auto_cleanup()`: valid function call, monitor_path-> {monitor_path}, clean_path-> {clean_path}, threshold-> {threshold_ratio}")
 
@@ -75,23 +79,37 @@ def auto_cleanup(
         return 0
 
     cleaned_bytes = 0
+    cleaned_files = 0
     for file in to_clean_files:
         try:
             full_fpath = os.path.join(clean_path, file)
             file_size = os.path.getsize(full_fpath)
             os.remove(full_fpath)
             cleaned_bytes += file_size
-            logging.info(f"`auto_cleanup()`: {file} of {file_size} was removed, total cleaned bytes: {cleaned_bytes}")
+            logging.debug(f"`auto_cleanup()`: {file} of {file_size} bytes was removed, total cleaned bytes: {cleaned_bytes}")
+            cleaned_files += 1 
         except:
-            logging.error(f"`auto_cleanup()`: {file} was unable to be removed")
+            logging.error(f"`auto_cleanup()`: {file} was unable to be removed", exc_info=True)
 
         if (used_bytes - cleaned_bytes) / total_bytes < threshold_ratio:
             break
     
     if (used_bytes - cleaned_bytes) / total_bytes > threshold_ratio:
-        logging.critical(f"`auto_cleanup()`: after cleaning all cleanable video files, disk usage still exceeds threshold input: {threshold_ratio}")
+        logging.critical(f"`auto_cleanup()`: after cleaning {cleaned_files} cleanable video files, disk usage still exceeds threshold input of {threshold_ratio}")
+    else:
+        total_bytes, used_bytes, _ = get_usb_usage(path=monitor_path)
+        logging.info(f"`auto_cleanup()`: complete, {cleaned_files} removed, disk usage now {used_bytes/GB}GB of total {total_bytes/GB}GB")
 
     return cleaned_bytes
+
+def get_seconds_until_next_run(hour, minute):
+    """Get seconds until next run at specified hour and minute
+    """
+    now = datetime.now()
+    next_run = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if next_run <= now:
+        next_run += timedelta(days=1)
+    return (next_run - now).total_seconds()
 
 if __name__ == "__main__":
     # configure logger and generate timestamped log file name
@@ -101,16 +119,19 @@ if __name__ == "__main__":
     )
     assert os.path.exists(LOGS_DIR_PATH) and os.path.isdir(LOGS_DIR_PATH)
     logging.basicConfig(
-        level=logging.INFO,  # Decreasing verbosity: DEBUG, INFO, WARNING, ERROR, CRITICAL
+        level=logging.DEBUG,  # Decreasing verbosity: DEBUG, INFO, WARNING, ERROR, CRITICAL
         format='%(asctime)s [%(levelname)s] %(message)s',
         handlers=[
             logging.FileHandler(os.path.join(LOGS_DIR_PATH, timestamped_log_fname)),
-            logging.StreamHandler()  # also prints to console
+            # logging.StreamHandler()  # also prints to console
         ]
     )
 
-    try:
-        # run some sort of loop here
-        auto_cleanup(monitor_path=USB_PATH, clean_path=USB_VID_PATH, threshold_ratio=THRESHOLD)
-    except:
-        logging.critical("main: `auto_cleanup()` call caused exception", exc_info=True)
+    total_bytes, used_bytes, _ = get_usb_usage(path=USB_PATH)
+    print(f"Current usage: {used_bytes*100/total_bytes}%")
+    while True:
+        time.sleep(get_seconds_until_next_run(hour=12, minute=00))
+        try:
+            auto_cleanup(monitor_path=USB_PATH, clean_path=USB_VID_PATH, threshold_ratio=THRESHOLD)
+        except:
+            logging.critical("main: `auto_cleanup()` call caused exception", exc_info=True)

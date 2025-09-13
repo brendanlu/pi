@@ -29,7 +29,6 @@ from typing import Callable, cast
 
 sys.path.append(r"/home/brend/Documents")
 import timestamping
-import diskmanage
 
 ###############################################################################
 # magic variables
