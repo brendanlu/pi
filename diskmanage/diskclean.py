@@ -128,7 +128,7 @@ if __name__ == "__main__":
     )
 
     total_bytes, used_bytes, _ = get_usb_usage(path=USB_PATH)
-    print(f"Current usage: {used_bytes*100/total_bytes}%")
+    print(f"diskclean.py started: current usage: {used_bytes*100/total_bytes}%")
     while True:
         time.sleep(get_seconds_until_next_run(hour=12, minute=00))
         try:

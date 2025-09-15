@@ -33,7 +33,7 @@ CAMERA_LABEL = "USB_CAMERA"
 # -- opencv image processing
 EVENT_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
 EVENT_LOGS_DIR_PATH = "/home/brend/Documents/prod/event_logs"
-EVENT_LOG_FILE_LOG_LEVEL = logging.DEBUG
+EVENT_LOG_FILE_LOG_LEVEL = logging.INFO
 MEAN_BRIGHTNESS_THRESHOLD = 15
 FRAMES_IN_A_ROW_FOR_BRIGHTNESS_EVENT = OPENCV_FPS * 2
 
