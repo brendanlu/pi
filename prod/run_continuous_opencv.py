@@ -33,23 +33,29 @@ CAMERA_LABEL = "USB_CAMERA"
 # -- opencv image processing
 EVENT_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
 EVENT_LOGS_DIR_PATH = "/home/brend/Documents/prod/event_logs"
-EVENT_LOG_FILE_LOG_LEVEL = logging.INFO
+EVENT_LOG_FILE_LOG_LEVEL = logging.DEBUG
 MEAN_BRIGHTNESS_THRESHOLD = 15
 FRAMES_IN_A_ROW_FOR_BRIGHTNESS_EVENT = OPENCV_FPS * 2
 
 
 def initialise_opencv(shutdown_flag: threading.Event) -> dict:
     logging.debug("Configuring cv2 camera...")
-    cap = cv2.VideoCapture(USB_CAMERA_DEVICE_NUMBER)
+    cap = cv2.VideoCapture(USB_CAMERA_DEVICE_NUMBER, cv2.CAP_V4L2)
     if not cap.isOpened():
         logging.critical("Cannot initialize USB video capture device")
         shutdown_flag.set()
     try:
-        cap.set(cv2.CAP_PROP_FPS, OPENCV_FPS)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, OPENCV_WIDTH)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, OPENCV_HEIGHT)
+        fourcc_set_flag = cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))  # type: ignore
+        fps_set_flag = cap.set(cv2.CAP_PROP_FPS, OPENCV_FPS)
+        width_set_flag = cap.set(cv2.CAP_PROP_FRAME_WIDTH, OPENCV_WIDTH)
+        height_set_flag = cap.set(cv2.CAP_PROP_FRAME_HEIGHT, OPENCV_HEIGHT)
+        if not fps_set_flag or not width_set_flag or not height_set_flag or not fourcc_set_flag:
+            logging.critical(f"Error while configuring opencv capture settings: "
+                             f"fourcc_set_flag={fourcc_set_flag}, fps_set_flag={fps_set_flag}, "
+                             f"width_set_flag={width_set_flag}, height_set_flag={height_set_flag}")
+            shutdown_flag.set()
     except:
-        logging.critical("Could not configure opencv capture settings")
+        logging.critical("Exception while configuring opencv capture settings")
         shutdown_flag.set()
     return dict(cap=cap)
 
