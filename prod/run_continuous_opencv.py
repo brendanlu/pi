@@ -285,4 +285,5 @@ if __name__ == "__main__":
         record_function=record_to_temp_avi,
         processing_function=avi_convert_to_mp4,
         cleanup_function=cleanup_opencv,
+        cleanup_straggler_temp_files=bool("-c" in sys.argv)
     )

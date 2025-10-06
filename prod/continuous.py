@@ -15,6 +15,7 @@ functions and configurations...and off you go...
 """
 
 import atexit
+import glob
 import logging
 import os
 import requests
@@ -22,6 +23,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 
 from concurrent.futures import ProcessPoolExecutor
 from dotenv import load_dotenv
@@ -56,13 +58,16 @@ USB_VID_PATH = os.path.join(USB_PATH, "vidfiles")
 
 # -- parallelism
 WORKERS_LIMIT = 2
-JOB_ERRORS_UNTIL_SYS_EXIT = 2
+JOB_ERRORS_UNTIL_PAUSE = 2
+INITIAL_PAUSE_SECONDS = 15 * 60  # this doubles each time
 JOB_QUEUE_SIZE_UNTIL_SYS_EXIT = WORKERS_LIMIT * 5
 # on average we expect process subprocesses to take strictly less than
 # VID_LENGTH_SECONDS, but set a multiplier to allow for some variability
 # around the mean
 SUBPROCESS_TIMEOUT_SECONDS = VID_LENGTH_SECONDS * 2
 
+# -- cleanup
+CLEANUP_STRAGGLER_GLOB = "*_TEMP.avi"
 
 ###############################################################################
 # definitions
@@ -187,6 +192,7 @@ def continuous_record_driver(
     record_function: Callable[[threading.Event, int, dict], tuple[str, dict]],
     processing_function: Callable[[str, str, int, dict], None],
     cleanup_function: Callable[[dict], None],
+    cleanup_straggler_temp_files: bool = False,
 ):
     """Details of functional abstraction (unless stated all functions receive
     the threading.Event() `shutdown_flag` as their first arg):
@@ -210,6 +216,25 @@ def continuous_record_driver(
             - <input> a dictionary of hardware objects
             - <NIL output>
     """
+    # -- initialise logging
+    assert ok_dir(LOGS_DIR_PATH)
+    timestamped_log_fname = timestamping.generate_filename(
+        # API was designed for camera recording in mind, but oh well...
+        camera_name=camera_name,
+        extension=".log",
+    )
+    logging.basicConfig(
+        # decreasing verbosity: DEBUG, INFO, WARNING, ERROR, CRITICAL
+        level=LOG_FILE_LOG_LEVEL,
+        format=LOG_FORMAT,
+        handlers=[
+            logging.FileHandler(
+                os.path.join(LOGS_DIR_PATH, timestamped_log_fname), mode="w"
+            ),
+            # logging.StreamHandler()  # also prints to console
+        ],
+    )
+
     # -- configure shutdown behaviour
     shutdown_flag = threading.Event()
 
@@ -231,25 +256,20 @@ def continuous_record_driver(
     signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
     signal.signal(signal.SIGTERM, signal_handler)  # kill or system shutdown
     signal.signal(signal.SIGQUIT, signal_handler)  # quit signal
+    
+    # -- clean leftover temp files instead of recording video
+    if cleanup_straggler_temp_files:
+        logging.info("Cleaning up straggling temp files in this directory...")
+        straggling_avi_temp_files = glob.glob(CLEANUP_STRAGGLER_GLOB)
+        for file in straggling_avi_temp_files:
+            try:
+                processing_function(file, USB_VID_PATH, SUBPROCESS_TIMEOUT_SECONDS, dict())
+                logging.info(f"Cleanup processing for {file} complete.")
+            except:
+                logging.error(f"Cleanup processing for {file} FAILED.", exc_info=True)
+        return
 
-    # -- initialise logging
-    assert ok_dir(LOGS_DIR_PATH)
-    timestamped_log_fname = timestamping.generate_filename(
-        # API was designed for camera recording in mind, but oh well...
-        camera_name=camera_name,
-        extension=".log",
-    )
-    logging.basicConfig(
-        # decreasing verbosity: DEBUG, INFO, WARNING, ERROR, CRITICAL
-        level=LOG_FILE_LOG_LEVEL,
-        format=LOG_FORMAT,
-        handlers=[
-            logging.FileHandler(
-                os.path.join(LOGS_DIR_PATH, timestamped_log_fname), mode="w"
-            ),
-            # logging.StreamHandler()  # also prints to console
-        ],
-    )
+    # -- otherwise, proceed to recording loop: configure pushcut notifications
     if CRITICAL_PHONE_ALERT:
         pushcut_notifier = CriticalAlertHandler()
         pushcut_notifier.setLevel(logging.CRITICAL)
@@ -269,6 +289,7 @@ def continuous_record_driver(
     n_videos_recorded = 0
     n_videos_complete = 0
     processing_job_errors = 0
+    curr_pause_seconds = INITIAL_PAUSE_SECONDS
     last_temp_fname = None
     while not shutdown_flag.is_set():
         try:
@@ -278,17 +299,21 @@ def continuous_record_driver(
                     try:
                         f.result()
                         n_videos_complete += 1
+                        curr_pause_seconds = INITIAL_PAUSE_SECONDS
                     except:
                         processing_job_errors += 1
                         logging.error(
                             f"Exception caught in job, {processing_job_errors} total job errors counted",
                             exc_info=True,
                         )
-                        if processing_job_errors > JOB_ERRORS_UNTIL_SYS_EXIT:
+                        if processing_job_errors > JOB_ERRORS_UNTIL_PAUSE:
                             logging.critical(
-                                f"{processing_job_errors} job exceptions caught, aborting recording loop"
+                                f"{processing_job_errors} job exceptions caught, pausing for {curr_pause_seconds} seconds..."
                             )
-                            shutdown_flag.set()
+                            # shutdown_flag.set()
+                            time.sleep(curr_pause_seconds)
+                            curr_pause_seconds *= 2
+                            processing_job_errors = 0
 
             # ---- monitor jobload
             futures = [f for f in futures if not f.done()]
@@ -360,4 +385,5 @@ def continuous_record_driver(
             logging.error(f"Processing for {last_temp_fname} FAILED.", exc_info=True)
 
     logging.info(f"Continuous recording loop: {n_videos_complete} videos saved to .mp4")
+
     logging.info("Driver script shutdown complete")
