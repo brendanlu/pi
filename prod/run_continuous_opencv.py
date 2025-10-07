@@ -45,14 +45,21 @@ def initialise_opencv(shutdown_flag: threading.Event) -> dict:
         logging.critical("Cannot initialize USB video capture device")
         shutdown_flag.set()
     try:
-        fourcc_set_flag = cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))  # type: ignore
+        fourcc_set_flag = cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))  # type: ignore
         fps_set_flag = cap.set(cv2.CAP_PROP_FPS, OPENCV_FPS)
         width_set_flag = cap.set(cv2.CAP_PROP_FRAME_WIDTH, OPENCV_WIDTH)
         height_set_flag = cap.set(cv2.CAP_PROP_FRAME_HEIGHT, OPENCV_HEIGHT)
-        if not fps_set_flag or not width_set_flag or not height_set_flag or not fourcc_set_flag:
-            logging.critical(f"Error while configuring opencv capture settings: "
-                             f"fourcc_set_flag={fourcc_set_flag}, fps_set_flag={fps_set_flag}, "
-                             f"width_set_flag={width_set_flag}, height_set_flag={height_set_flag}")
+        if (
+            not fps_set_flag
+            or not width_set_flag
+            or not height_set_flag
+            or not fourcc_set_flag
+        ):
+            logging.critical(
+                f"Error while configuring opencv capture settings: "
+                f"fourcc_set_flag={fourcc_set_flag}, fps_set_flag={fps_set_flag}, "
+                f"width_set_flag={width_set_flag}, height_set_flag={height_set_flag}"
+            )
             shutdown_flag.set()
     except:
         logging.critical("Exception while configuring opencv capture settings")
@@ -115,6 +122,11 @@ def record_to_temp_avi(
             # opencv boilerplate
             ret, frame = cap.read()
             if not ret or shutdown_flag.is_set():
+                if frame_count == 0:
+                    logging.warning(
+                        f"`record_to_temp_avi()` {avi_fname}: no frames recorded, deleting temp .avi"
+                    )
+                    os.remove(avi_fname)
                 if shutdown_flag.is_set():
                     logging.warning(
                         f"`record_to_temp_avi()` {avi_fname}: interrupted after {frame_count} frames"
@@ -285,5 +297,5 @@ if __name__ == "__main__":
         record_function=record_to_temp_avi,
         processing_function=avi_convert_to_mp4,
         cleanup_function=cleanup_opencv,
-        cleanup_straggler_temp_files=bool("-c" in sys.argv)
+        cleanup_straggler_temp_files=bool("-c" in sys.argv),
     )

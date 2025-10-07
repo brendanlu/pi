@@ -173,7 +173,7 @@ def ffmpeg_template_processing_function(
             f"`{function_logging_label}()` PID {os.getpid()}: Process job for {in_fname} successfully complete, output to {out_fpath}"
         )
     except:
-        logging.critical(
+        logging.error(
             f"`{function_logging_label}()` PID {os.getpid()}: Processing job for {in_fname} FAILED.",
             exc_info=True,
         )
@@ -256,14 +256,16 @@ def continuous_record_driver(
     signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
     signal.signal(signal.SIGTERM, signal_handler)  # kill or system shutdown
     signal.signal(signal.SIGQUIT, signal_handler)  # quit signal
-    
+
     # -- clean leftover temp files instead of recording video
     if cleanup_straggler_temp_files:
         logging.info("Cleaning up straggling temp files in this directory...")
         straggling_avi_temp_files = glob.glob(CLEANUP_STRAGGLER_GLOB)
         for file in straggling_avi_temp_files:
             try:
-                processing_function(file, USB_VID_PATH, SUBPROCESS_TIMEOUT_SECONDS, dict())
+                processing_function(
+                    file, USB_VID_PATH, SUBPROCESS_TIMEOUT_SECONDS, dict()
+                )
                 logging.info(f"Cleanup processing for {file} complete.")
             except:
                 logging.error(f"Cleanup processing for {file} FAILED.", exc_info=True)
@@ -288,7 +290,7 @@ def continuous_record_driver(
     logging.info("Starting continuous recording and processing loop...")
     n_videos_recorded = 0
     n_videos_complete = 0
-    processing_job_errors = 0
+    processing_or_recording_errors = 0
     curr_pause_seconds = INITIAL_PAUSE_SECONDS
     last_temp_fname = None
     while not shutdown_flag.is_set():
@@ -301,19 +303,19 @@ def continuous_record_driver(
                         n_videos_complete += 1
                         curr_pause_seconds = INITIAL_PAUSE_SECONDS
                     except:
-                        processing_job_errors += 1
+                        processing_or_recording_errors += 1
                         logging.error(
-                            f"Exception caught in job, {processing_job_errors} total job errors counted",
+                            f"Exception caught in job, {processing_or_recording_errors} total job errors since last pause",
                             exc_info=True,
                         )
-                        if processing_job_errors > JOB_ERRORS_UNTIL_PAUSE:
+                        if processing_or_recording_errors > JOB_ERRORS_UNTIL_PAUSE:
                             logging.critical(
-                                f"{processing_job_errors} job exceptions caught, pausing for {curr_pause_seconds} seconds..."
+                                f"{processing_or_recording_errors} job exceptions caught, pausing for {curr_pause_seconds} seconds..."
                             )
                             # shutdown_flag.set()
                             time.sleep(curr_pause_seconds)
                             curr_pause_seconds *= 2
-                            processing_job_errors = 0
+                            processing_or_recording_errors = 0
 
             # ---- monitor jobload
             futures = [f for f in futures if not f.done()]
@@ -331,18 +333,22 @@ def continuous_record_driver(
             last_temp_fname, last_dynamic_processing_configs = record_function(
                 shutdown_flag, VID_LENGTH_SECONDS, hardware_dict
             )
-            n_videos_recorded += 1
-            logging.info(
-                f"Video #{n_videos_recorded}, {last_temp_fname}, submitted for conversion..."
-            )
-            future = executor.submit(
-                processing_function,
-                last_temp_fname,
-                USB_VID_PATH,
-                SUBPROCESS_TIMEOUT_SECONDS,
-                last_dynamic_processing_configs,
-            )
-            futures.append(future)
+            if os.path.isfile(last_temp_fname):
+                n_videos_recorded += 1
+                logging.info(
+                    f"Video #{n_videos_recorded}, {last_temp_fname}, submitted for conversion..."
+                )
+                future = executor.submit(
+                    processing_function,
+                    last_temp_fname,
+                    USB_VID_PATH,
+                    SUBPROCESS_TIMEOUT_SECONDS,
+                    last_dynamic_processing_configs,
+                )
+                futures.append(future)
+            else:
+                # video must have been deleted with 0 frames
+                processing_or_recording_errors += 1
 
         except:
             logging.critical(
