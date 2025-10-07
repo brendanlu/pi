@@ -33,7 +33,7 @@ CAMERA_LABEL = "USB_CAMERA"
 # -- opencv image processing
 EVENT_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
 EVENT_LOGS_DIR_PATH = "/home/brend/Documents/prod/event_logs"
-EVENT_LOG_FILE_LOG_LEVEL = logging.DEBUG
+EVENT_LOG_FILE_LOG_LEVEL = logging.INFO
 MEAN_BRIGHTNESS_THRESHOLD = 15
 FRAMES_IN_A_ROW_FOR_BRIGHTNESS_EVENT = OPENCV_FPS * 2
 
@@ -170,9 +170,6 @@ def record_to_temp_avi(
             # check if video duration elapsed
             time_elapsed = time.monotonic() - recording_start_time
             if time_elapsed >= secs:
-                logging.info(
-                    f"`record_to_temp_avi()` {avi_fname}: full {time_elapsed:.1f}s video written to temp file"
-                )
                 break
 
             # sleep to throttle to fps
@@ -193,16 +190,15 @@ def record_to_temp_avi(
         # so we get a mean here to pass into ffmpeg
         # nb. this will make the video patchy as the actual recording fps
         # was dynamic, but oh well...
-        effective_mean_fps = frame_count / (time.monotonic() - recording_start_time)
-        logging.debug(
-            f"`record_to_temp_avi()` {avi_fname}: effective framerate was {effective_mean_fps}fps"
-        )
         writer.release()
         logging.debug(
             f"`record_to_temp_avi()` {avi_fname}: writer for {avi_fname} released."
         )
-        # TODO: when main driver improved, raise error here if frame_count==0
-        # still return the name to try and convert and save as mp4
+        effective_mean_fps = frame_count / (time.monotonic() - recording_start_time)
+        logging.info(
+            f"`record_to_temp_avi()` {avi_fname}: full {time_elapsed:.1f}s video written to temp "
+            f"at effective fps of {effective_mean_fps}"
+        )
 
         # make sure to save local values back into globals to persist into
         # next function call

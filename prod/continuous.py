@@ -170,7 +170,7 @@ def ffmpeg_template_processing_function(
         else:
             os.remove(in_fname)
         logging.info(
-            f"`{function_logging_label}()` PID {os.getpid()}: Process job for {in_fname} successfully complete, output to {out_fpath}"
+            f"`{function_logging_label}()` PID {os.getpid()}: Processed {in_fname} to {out_fpath}"
         )
     except:
         logging.error(
