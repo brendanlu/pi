@@ -1,8 +1,8 @@
 from flask import Flask, render_template, send_file, abort, jsonify, Response
-from werkzeug.utils import safe_join
+from werkzeug.utils import safe_join # type: ignore
 
 from picamera2 import Picamera2
-from libcamera import Transform
+from libcamera import Transform # type: ignore
 import cv2
 
 import atexit
@@ -77,8 +77,11 @@ def get_video_duration(fpath: str, cache: dict) -> float:
                 duration = get_video_duration_ffprobe(fpath)
                 cache[fname] = duration
             except:
-                cache[fname] == 0 # give up on this
-                logging.warning(f"{fpath} ffprobe call for duration has errored twice, and permanently stored in cache as error'ed")
+                cache[fname] = 0 # give up on this
+                logging.warning(
+                    f"{fpath} ffprobe call for duration has errored twice,"
+                    "and permanently stored in cache as error'ed"
+                )
         return cache[fname]
     else: 
         try:
