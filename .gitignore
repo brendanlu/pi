@@ -197,10 +197,15 @@ cython_debug/
 # ignore any venv looking files
 .*venv*
 
-# Ignore video files
+# Ignore video and image files
 *.avi
 *.mp4
 *.h264
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.gif
 
 # ignore json cache format
 _*.json
