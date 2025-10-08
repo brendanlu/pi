@@ -174,7 +174,7 @@ def ffmpeg_template_processing_function(
         )
     except:
         logging.error(
-            f"`{function_logging_label}()` PID {os.getpid()}: Processing job for {in_fname} FAILED.",
+            f"`{function_logging_label}()` PID {os.getpid()}: Processing for {in_fname} FAILED.",
             exc_info=True,
         )
         if proc:

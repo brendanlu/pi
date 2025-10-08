@@ -110,7 +110,7 @@ def record_to_temp_avi(
         raise RuntimeError("VideoWriter failed to initialize")
 
     # -- begin recording
-    logging.info(f"`record_to_temp_avi()` {avi_fname}: recording {secs}s video now...")
+    logging.info(f"`record_to_temp_avi()` {avi_fname}: recording {secs}s video...")
     # the key design idea below: we always want to try and store, and later
     # convert whatever we record regardless of if we encounter an exception midway
     try:
@@ -196,7 +196,7 @@ def record_to_temp_avi(
         )
         effective_mean_fps = frame_count / (time.monotonic() - recording_start_time)
         logging.info(
-            f"`record_to_temp_avi()` {avi_fname}: full {time_elapsed:.1f}s video written to temp "
+            f"`record_to_temp_avi()` {avi_fname}: recorded {time_elapsed:.1f}s "
             f"at effective fps of {effective_mean_fps}"
         )
 
