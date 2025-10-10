@@ -211,7 +211,7 @@ def serve_video(filename):
 if __name__ == "__main__": 
     # initialize logger
     logging.basicConfig(
-        level=logging.DEBUG,  # Decreasing verbosity: DEBUG, INFO, WARNING, ERROR, CRITICAL
+        level=logging.INFO,  # Decreasing verbosity: DEBUG, INFO, WARNING, ERROR, CRITICAL
         format='%(asctime)s [%(levelname)s] %(message)s',
         handlers=[
             logging.FileHandler("app_last.log", mode="w"),

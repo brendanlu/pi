@@ -48,7 +48,7 @@ VID_LENGTH_SECONDS = 5 * 60
 CRITICAL_PHONE_ALERT = True
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
 LOGS_DIR_PATH = "/home/brend/Documents/prod/logs"
-LOG_FILE_LOG_LEVEL = logging.INFO
+LOG_FILE_LOG_LEVEL = logging.ERROR
 
 # -- memory disk
 # USB_DEVICE_NAME = "E657-3701"
